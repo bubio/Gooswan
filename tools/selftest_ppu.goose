@@ -93,7 +93,24 @@ fn ppu_test() {
     ppu_check("s3 x0 color3", fb[0], 0xF00);
     ppu_check("s3 x1 color2", fb[1], 0x0F0);
     ppu_check("s3 x2 color1", fb[2], 0x123);
-    ppu_check("s3 x3 transparent backdrop", fb[3], 0xABC);
+    ppu_check("s3 2bpp pal0 pixel0 opaque", fb[3], 0x000);
+    // Color 2bpp retains the palette-bit-2 transparency rule. An opaque
+    // SCR2 color-zero pixel must cover SCR1 (Dark Eyes' dialogue uses this).
+    ppu_set16(0xFE00 + 8 * 32, 0x456);
+    for k in 4 { ppu_set16(k * 2, 1); }
+    ppu_set16(0x800, 0);
+    ppu_set16(0x802, 4 << 9);
+    ppu_set16(0x804, 8 << 9);
+    ppu_set16(0x806, 12 << 9);
+    io_ports[0x07] = 0x10;
+    io_ports[0x00] = 3;
+    render_line(0);
+    ppu_check("s3 2bpp pal0 covers scr1", fb[0], 0x000);
+    ppu_check("s3 2bpp pal4 pixel0 transparent", fb[8], 0xF00);
+    ppu_check("s3 2bpp pal8 pixel0 opaque", fb[16], 0x456);
+    ppu_check("s3 2bpp pal12 pixel0 transparent", fb[24], 0xF00);
+    io_ports[0x07] = 0;
+    io_ports[0x00] = 1;
     mem[0x2000 + 513 * 16] = 0xFF; mem[0x2000 + 513 * 16 + 1] = 0xFF;
     ppu_set16(2, 1 | (1 << 13));
     render_line(0);
@@ -107,6 +124,10 @@ fn ppu_test() {
     ppu_check("s3 4bpp x1", fb[1], 0x222);
     ppu_check("s3 4bpp x6", fb[6], 0x777);
     ppu_check("s3 4bpp x7", fb[7], 0x888);
+    ppu_check("s3 4bpp pal0 pixel0 transparent", fb[8], 0x555);
+    ppu_set16(2, 8 << 9);
+    render_line(0);
+    ppu_check("s3 4bpp pal8 pixel0 transparent", fb[8], 0x555);
     // Scene 4: sprites
     ppu_clear();
     ppu_setup_mono();

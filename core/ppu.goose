@@ -54,7 +54,9 @@ fn ppu_resolve(pal: i64, pixel: i64) -> i64 {
 
 fn ppu_transparent(pal: i64, pixel: i64) -> bool {
     if pixel != 0 { return false; }
-    if ppu_color_mode() { return true; }
+    // Only 4bpp makes color zero unconditionally transparent. Color 2bpp
+    // uses the same palette-bit-2 opacity rule as monochrome.
+    if ppu_color_mode() && ((io_ports[VIDEO_MODE] as i64) & 0x40) != 0 { return true; }
     return !((pal >= 0 && pal <= 3) || (pal >= 8 && pal <= 11));
 }
 
