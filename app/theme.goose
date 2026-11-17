@@ -1,8 +1,8 @@
 // Compact Nuklear chrome and readable toggles, following UsaProject's
 // docs/nuklear-reference.md. All dimensions are logical pixels.
-let FRONT_MENU_HEIGHT:   i64 = 26;
+var FRONT_MENU_HEIGHT:   i64 = 26;
 let FRONT_STATUS_HEIGHT: i64 = 24;
-let FRONT_CHROME_HEIGHT: i64 = FRONT_MENU_HEIGHT + FRONT_STATUS_HEIGHT;
+fn front_chrome_height() -> i64 { return FRONT_MENU_HEIGHT + FRONT_STATUS_HEIGHT; }
 let UI_TEXT = ui::Color { 220, 222, 226, 255 };
 let UI_MUTED = ui::Color { 155, 161, 170, 255 };
 let UI_ACCENT = ui::Color { 70, 110, 160, 255 };
@@ -49,6 +49,10 @@ fn front_apply_theme() {
     s.scrollv.cursor_normal = ui::style_item_color(ui::Color { 93, 98, 108, 255 });
     ui::set_style(front_ui, s);
     ui::style_hide_cursor(front_ui);
+    let chrome = front_menu_style().window;
+    let height = front_menu_row_height() + 2.0 * chrome.padding.y + chrome.spacing.y;
+    FRONT_MENU_HEIGHT = height as! i64;
+    if FRONT_MENU_HEIGHT < height { FRONT_MENU_HEIGHT += 1; }
 }
 fn front_gap(height: f32) { ui::layout_row_dynamic(front_ui, height, 1); ui::spacing(front_ui, 1); }
 fn front_box(id: const u8[:], title: const u8[:], height: f32) -> bool {

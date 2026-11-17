@@ -11,24 +11,104 @@ var front_recent:          bool = false;
 var front_recent_reopen:   bool = false;
 var front_pre_mute:        i64  = 100;
 
-fn front_item(title: const u8[:], shortcut: const u8[:], action: i64, enabled: bool) {
+// Measure the same rows that are drawn, in logical pixels using the active font.
+struct FrontMenuItem { title: const u8[:], shortcut: const u8[:], action: i64, enabled: bool, checked: bool = false }
+struct FrontMenuSize { width: f32 = 0.0, height: f32 = 0.0 }
+fn front_menu_style() -> ui::Style {
+    var s = ui::style(front_ui);
+    s.window.padding = float2 { 4.0, 2.0 };
+    s.window.spacing = float2 { 2.0, 2.0 };
+    return s;
+}
+fn front_menu_row_height() -> f32 {
+    let s = ui::style(front_ui);
+    return ui::info(ui::font(front_ui)).height + 2.0 * (s.menu_button.padding.y + s.menu_button.border);
+}
+fn front_menu_text_width(text: const u8[:]) -> f32 { return ui::text_width(ui::font(front_ui), text); }
+fn front_menu_button_width(text: const u8[:], style: ui::StyleButton) -> f32 {
+    return front_menu_text_width(text) + 2.0 * (style.padding.x + style.border);
+}
+fn front_menu_separator_height() -> f32 { return ui::style(front_ui).window.spacing.y * 2.0 + 1.0; }
+fn front_menu_has_checks(items: const FrontMenuItem[:]) -> bool {
+    for item in items { if item.checked { return true; } }
+    return false;
+}
+fn front_menu_measure(items: const FrontMenuItem[:]) -> FrontMenuSize {
+    let s = ui::style(front_ui);
+    var size = FrontMenuSize {};
+    var shortcut_width: f32 = 0.0;
+    for item in items {
+        if item.action == 0 { size.height += front_menu_separator_height(); }
+        else {
+            size.height += front_menu_row_height();
+            size.width = max(size.width, front_menu_text_width(item.title));
+            shortcut_width = max(shortcut_width, front_menu_text_width(item.shortcut));
+        }
+        size.height += s.window.spacing.y;
+    }
+    // Reserve separate label and shortcut columns with a readable minimum gap.
+    if shortcut_width > 0.0 { size.width += ui::info(ui::font(front_ui)).height + shortcut_width; }
+    if front_menu_has_checks(items) { size.width += ui::info(ui::font(front_ui)).height; }
+    size.width += 2.0 * (s.menu_button.padding.x + s.menu_button.border);
+    return size;
+}
+// Groups reserve scrollbar space even when the content fits. Include it in the
+// natural size, then limit only the viewport when the host window is smaller.
+fn front_menu_popup_size(content: FrontMenuSize, ww: f32, hh: f32) -> float2, f32 {
+    let s = ui::style(front_ui).window;
+    let anchor = ui::widget_bounds(front_ui);
+    let outer = 2.0 * (s.menu_padding.y + s.menu_border) + s.spacing.y;
+    let body = content.height + 2.0 * s.group_padding.y + s.scrollbar_size.y;
+    let width = content.width + 2.0 * (s.group_padding.x + s.menu_padding.x + s.menu_border) + s.scrollbar_size.x;
+    let height = min(body + outer, max(hh - anchor.y - anchor.h - s.spacing.y, outer + 1.0));
+    return float2 { min(width, max(ww - anchor.x - s.spacing.x, 1.0)), height }, max(height - outer, 1.0);
+}
+fn front_action_menu(label: const u8[:], id: const u8[:], items: const FrontMenuItem[:], ww: f32, hh: f32) {
+    let c = front_ui;
+    let checks = front_menu_has_checks(items);
+    let size, body = front_menu_popup_size(front_menu_measure(items), ww, hh);
+    if ui::menu_begin_label(c, label, ui::TEXT_LEFT, size) {
+        front_menu_open = true;
+        ui::layout_row_dynamic(c, body, 1);
+        if ui::group_begin(c, id, 0) {
+            for item in items {
+                if item.action == 0 { front_menu_sep(); }
+                else {
+                    ui::layout_row_dynamic(c, front_menu_row_height(), 1);
+                    front_item(item.title, item.shortcut, item.action, item.enabled, checks, item.checked);
+                }
+            }
+            ui::group_end(c);
+        }
+        if front_action != 0 { ui::menu_close(c); }
+        ui::menu_end(c);
+    }
+}
+fn front_item(title: const u8[:], shortcut: const u8[:], action: i64, enabled: bool, checks: bool, checked: bool) {
     let c = front_ui;
     if !enabled { ui::widget_disable_begin(c); }
     let bounds = ui::widget_bounds(c);
     var item_style = ui::style(c).menu_button; item_style.text_alignment = ui::TEXT_LEFT as u32;
+    let inset = item_style.padding.x + item_style.border;
+    if checks { item_style.padding.x += ui::info(ui::font(c)).height; }
     if ui::button_label_styled(c, item_style, title) && enabled { front_action = action; }
+    if checked {
+        let x = bounds.x + inset; let y = bounds.y + bounds.h / 2.0;
+        ui::stroke_line(c, x, y, x + 3.0, y + 3.0, 1.5, UI_TEXT);
+        ui::stroke_line(c, x + 3.0, y + 3.0, x + 9.0, y - 4.0, 1.5, UI_TEXT);
+    }
     if shortcut.len > 0 {
         let width = ui::text_width(ui::font(c), shortcut);
-        ui::draw_text(c, ui::rect(bounds.x + bounds.w - width - 6.0, bounds.y, width, bounds.h), shortcut, ui::font(c), UI_CLEAR, UI_MUTED);
+        ui::draw_text(c, ui::rect(bounds.x + bounds.w - width - inset, bounds.y, width, bounds.h), shortcut, ui::font(c), UI_CLEAR, UI_MUTED);
     }
     if !enabled { ui::widget_disable_end(c); }
 }
 fn front_menu_sep() {
     let c = front_ui;
-    ui::layout_row_dynamic(c, 5.0, 1);
+    ui::layout_row_dynamic(c, front_menu_separator_height(), 1);
     let state, r = ui::widget(c);
-    if state != 0 { ui::stroke_line(c, r.x + 2.0, r.y + 2.0, r.x + r.w - 2.0, r.y + 2.0, 1.0, UI_BORDER); }
-    ui::layout_row_dynamic(c, 22.0, 1);
+    let inset = ui::style(c).menu_button.padding.x;
+    if state != 0 { ui::stroke_line(c, r.x + inset, r.y + r.h / 2.0, r.x + r.w - inset, r.y + r.h / 2.0, 1.0, UI_BORDER); }
 }
 fn front_prepare_dialog(name: const u8[:], bounds: ui::Rect, reopen: bool) {
     ui::window_show(front_ui, name, ui::SHOWN);
@@ -49,50 +129,52 @@ fn front_draw_ui() {
     let screen = gfx::screen_size(); let density = max(hostwindow_scale(), 1.0);
     let ww = screen.x / density; let hh = screen.y / density;
     // Background chrome does not compete with the foreground dialog for focus.
-    let saved = ui::style(c); var chrome = saved;
-    chrome.window.padding = float2 { 4.0, 2.0 };
-    chrome.window.spacing = float2 { 2.0, 2.0 };
+    let saved = ui::style(c); let chrome = front_menu_style();
     ui::set_style(c, chrome);
     ui::window_set_bounds(c, "Menu", ui::rect(0.0, 0.0, ww, FRONT_MENU_HEIGHT));
     if ui::begin(c, "Menu", ui::rect(0.0, 0.0, ww, FRONT_MENU_HEIGHT), front_window_flags(ui::WINDOW_NO_SCROLLBAR)) {
-        ui::menubar_begin(c); ui::layout_row_static(c, 20.0, 56, 3);
-        if ui::menu_begin_label(c, "File", ui::TEXT_LEFT, float2 { min(292.0, ww - 8.0), min(232.0, hh - 32.0) }) {
-            front_menu_open = true;
-            ui::layout_row_dynamic(c, min(210.0, hh - 54.0), 1);
-            if ui::group_begin(c, "FileActions", 0) {
-                ui::layout_row_dynamic(c, 22.0, 1);
-                front_item("Open ROM...", "Ctrl+O", 1, !front_dialog);
-                front_item("Open Recent...", "", 15, settings.recent_count > 0);
-                front_menu_sep();
-                front_item("Save State", "Ctrl+S", 4, front_path.len > 0);
-                front_item("Load State", "Ctrl+L", 5, front_path.len > 0);
-                front_menu_sep();
-                front_item("Settings...", "Ctrl+,", 6, true);
-                front_item("About Gooswan...", "", 7, true);
-                front_menu_sep(); front_item("Quit", "Ctrl+Q", 8, true);
-                ui::group_end(c);
-            }
-            if front_action != 0 { ui::menu_close(c); }
-            ui::menu_end(c);
-        }
-        if ui::menu_begin_label(c, "Emu", ui::TEXT_LEFT, float2 { min(270.0, ww - 8.0), 110.0 }) {
-            front_menu_open = true; ui::layout_row_dynamic(c, 22.0, 1);
-            front_item(if front_paused { "Resume" } else { "Pause" }, "Ctrl+P", 9, front_loaded);
-            front_item("Reset", "Ctrl+R", 10, front_loaded);
-            front_menu_sep(); front_item("BIOS Settings...", "", 11, true);
-            if front_action != 0 { ui::menu_close(c); }
-            ui::menu_end(c);
-        }
-        if ui::menu_begin_label(c, "View", ui::TEXT_LEFT, float2 { min(270.0, ww - 8.0), min(278.0, hh - 32.0) }) {
-            front_menu_open = true;
-            ui::layout_row_dynamic(c, min(256.0, hh - 54.0), 1);
-            if ui::group_begin(c, "ViewActions", 0) {
-                front_display_controls();
-                ui::group_end(c);
-            }
-            if front_action != 0 { ui::menu_close(c); }
-            ui::menu_end(c);
-        }
+        let file_items: FrontMenuItem[10] = [
+            FrontMenuItem { "Open ROM...", "Ctrl+O", 1, !front_dialog },
+            FrontMenuItem { "Open Recent...", "", 15, settings.recent_count > 0 },
+            FrontMenuItem { "", "", 0, false },
+            FrontMenuItem { "Save State", "Ctrl+S", 4, front_path.len > 0 },
+            FrontMenuItem { "Load State", "Ctrl+L", 5, front_path.len > 0 },
+            FrontMenuItem { "", "", 0, false },
+            FrontMenuItem { "Settings...", "Ctrl+,", 6, true },
+            FrontMenuItem { "About Gooswan...", "", 7, true },
+            FrontMenuItem { "", "", 0, false },
+            FrontMenuItem { "Quit", "Ctrl+Q", 8, true },
+        ];
+        let emu_items: FrontMenuItem[4] = [
+            FrontMenuItem { if front_paused { "Resume" } else { "Pause" }, "Ctrl+P", 9, front_loaded },
+            FrontMenuItem { "Reset", "Ctrl+R", 10, front_loaded },
+            FrontMenuItem { "", "", 0, false },
+            FrontMenuItem { "BIOS Settings...", "", 11, true },
+        ];
+        let view_items: FrontMenuItem[13] = [
+            FrontMenuItem { "Scale 1x", "", 21, true, settings.scale == 1 },
+            FrontMenuItem { "Scale 2x", "", 22, true, settings.scale == 2 },
+            FrontMenuItem { "Scale 3x", "", 23, true, settings.scale == 3 },
+            FrontMenuItem { "Scale 4x", "", 24, true, settings.scale == 4 },
+            FrontMenuItem { "", "", 0, false },
+            FrontMenuItem { "Fullscreen", "F11", 12, true, hostwindow_is_fullscreen() },
+            FrontMenuItem { "", "", 0, false },
+            FrontMenuItem { "Normal", "", 30, true, settings.rotation == 0 },
+            FrontMenuItem { "Rotate Left", "", 32, true, settings.rotation == 2 },
+            FrontMenuItem { "Rotate Right", "", 31, true, settings.rotation == 1 },
+            FrontMenuItem { "", "", 0, false },
+            FrontMenuItem { "Nearest", "", 40, true, !settings.linear },
+            FrontMenuItem { "Bilinear", "", 41, true, settings.linear },
+        ];
+        ui::menubar_begin(c);
+        // Extra space belongs to header cells, not to the popup item spacing.
+        let gap = ui::info(ui::font(c)).height * 0.75;
+        let widths: f32[3] = [front_menu_button_width("File", chrome.menu_button) + gap,
+            front_menu_button_width("Emu", chrome.menu_button) + gap, front_menu_button_width("View", chrome.menu_button) + gap];
+        ui::layout_row(c, ui::STATIC, front_menu_row_height(), widths[..]);
+        front_action_menu("File", "FileActions", file_items[..], ww, hh);
+        front_action_menu("Emu", "EmuActions", emu_items[..], ww, hh);
+        front_action_menu("View", "ViewActions", view_items[..], ww, hh);
         ui::menubar_end(c);
     }
     ui::end(c);
@@ -170,7 +252,7 @@ fn front_draw_welcome(ww: f32, hh: f32) {
     let saved = ui::style(c); var clear = saved;
     clear.window.fixed_background = ui::style_item_color(ui::Color { 19, 21, 25, 255 });
     ui::set_style(c, clear);
-    if ui::begin(c, "Welcome", ui::rect((ww - w) / 2.0, FRONT_MENU_HEIGHT + (hh - FRONT_CHROME_HEIGHT - h) / 2.0, w, h), front_window_flags(ui::WINDOW_NO_SCROLLBAR | ui::WINDOW_BACKGROUND)) {
+    if ui::begin(c, "Welcome", ui::rect((ww - w) / 2.0, FRONT_MENU_HEIGHT + (hh - front_chrome_height() - h) / 2.0, w, h), front_window_flags(ui::WINDOW_NO_SCROLLBAR | ui::WINDOW_BACKGROUND)) {
         ui::layout_row_dynamic(c, 28.0, 1); ui::label(c, "Gooswan", ui::TEXT_CENTERED);
         ui::layout_row_dynamic(c, 22.0, 1); ui::label_colored(c, "WonderSwan / WonderSwan Color", ui::TEXT_CENTERED, UI_MUTED);
         front_gap(8.0); ui::layout_row_dynamic(c, 28.0, 1);
@@ -180,7 +262,7 @@ fn front_draw_welcome(ww: f32, hh: f32) {
 }
 fn front_draw_settings(ww: f32, hh: f32) {
     let c = front_ui; let w = min(552.0, ww - 16.0); let h = min(414.0, hh - 64.0);
-    front_prepare_dialog("Settings", ui::rect((ww - w) / 2.0, FRONT_MENU_HEIGHT + (hh - FRONT_CHROME_HEIGHT - h) / 2.0, w, h), front_settings_reopen);
+    front_prepare_dialog("Settings", ui::rect((ww - w) / 2.0, FRONT_MENU_HEIGHT + (hh - front_chrome_height() - h) / 2.0, w, h), front_settings_reopen);
     front_settings_reopen = false;
     if ui::begin(c, "Settings", ui::rect((ww - w) / 2.0, 34.0, w, h), front_window_flags(ui::WINDOW_BORDER | ui::WINDOW_TITLE | ui::WINDOW_MOVABLE | ui::WINDOW_CLOSABLE | ui::WINDOW_NO_SCROLLBAR)) {
         ui::layout_row_static(c, 26.0, 98, 2);
@@ -250,24 +332,6 @@ fn front_input_settings() {
         for i in 11 { settings.keys[i] = app_text(DEFAULT_KEYS[i]); settings.pads[i] = DEFAULT_PADS[i]; }
         settings.rotate_input = true; front_capture = -1; settings_save();
     }
-}
-fn front_display_controls() {
-    let c = front_ui;
-    ui::layout_row_dynamic(c, 18.0, 1); ui::label_colored(c, "Scale", ui::TEXT_LEFT, UI_MUTED);
-    ui::layout_row_dynamic(c, 24.0, 4);
-    for n in 1..5 { if front_tab(str(n, "x"), settings.scale == n) { front_action = 20 + n; } }
-    ui::layout_row_dynamic(c, 22.0, 1);
-    var fullscreen = hostwindow_is_fullscreen(); if ui::checkbox_label(c, "Fullscreen (F11)", fullscreen) { front_action = 12; }
-    front_gap(4.0);
-    ui::layout_row_dynamic(c, 18.0, 1); ui::label_colored(c, "Orientation", ui::TEXT_LEFT, UI_MUTED);
-    ui::layout_row_dynamic(c, 24.0, 3);
-    let rotations: const u8[:][3] = ["Normal", "Left", "Right"]; let values: i64[3] = [0, 2, 1];
-    for i in 3 { if front_tab(rotations[i], settings.rotation == values[i]) { front_action = 30 + values[i]; } }
-    front_gap(4.0);
-    ui::layout_row_dynamic(c, 18.0, 1); ui::label_colored(c, "Sampling", ui::TEXT_LEFT, UI_MUTED);
-    ui::layout_row_dynamic(c, 24.0, 2);
-    if front_tab("Nearest", !settings.linear) { front_action = 40; }
-    if front_tab("Bilinear", settings.linear) { front_action = 41; }
 }
 fn front_draw_recent(ww: f32, hh: f32) {
     let c = front_ui; let w = min(476.0, ww - 16.0); let h = min(354.0, hh - 64.0);

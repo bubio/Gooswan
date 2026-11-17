@@ -93,7 +93,7 @@ fn front_resize() {
     if hostwindow_is_fullscreen() { return; }
     let w: i64 = if settings.rotation == 0 { 224 } else { 144 };
     let h: i64 = if settings.rotation == 0 { 144 } else { 224 };
-    hostwindow_size(w * settings.scale, h * settings.scale + FRONT_CHROME_HEIGHT);
+    hostwindow_size(w * settings.scale, h * settings.scale + front_chrome_height());
 }
 fn front_set_scale(scale: i64) { settings.scale = scale; front_resize(); settings_save(); }
 fn front_set_rotation(rotation: i64) { settings.rotation = rotation; front_resize(); settings_save(); }
@@ -321,12 +321,13 @@ fn front_main() {
     settings_load();
     let w: i64 = if settings.rotation == 0 { 224 } else { 144 };
     let h: i64 = if settings.rotation == 0 { 144 } else { 224 };
-    if !gfx::open("Gooswan", w * settings.scale, h * settings.scale + (if front_check { 0 } else { FRONT_CHROME_HEIGHT }), gfx::NO_VSYNC | gfx::WINDOW_RESIZABLE) { print("gfx: ", gfx::error()); exit(3); }
+    if !gfx::open("Gooswan", w * settings.scale, h * settings.scale + (if front_check { 0 } else { front_chrome_height() }), gfx::NO_VSYNC | gfx::WINDOW_RESIZABLE) { print("gfx: ", gfx::error()); exit(3); }
     hostplatform_open();
     front_resize();
     front_ui = front_make_ui();
     if front_ui.id == 0 { print("ui: ", ui::error()); exit(3); }
     front_apply_theme();
+    if !front_check { front_resize(); }
     front_audio_ok = hostaudio_open(core::AUDIO_RATE);
     hostaudio_volume(settings.volume);
     if settings_notice.len > 0 { front_notify(settings_notice); }
