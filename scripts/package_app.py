@@ -52,6 +52,9 @@ def package(binary, platform, arch):
         executable.chmod(0o755)
         for name in ('README.md', 'THIRD_PARTY_NOTICES.md'):
             shutil.copy2(ROOT / name, resources)
+        (resources / 'docs').mkdir()
+        for name in ('user-guide.md', 'development.md'):
+            shutil.copy2(ROOT / 'docs' / name, resources / 'docs' / name)
         shutil.copytree(ROOT / 'assets/fonts', resources / 'assets/fonts')
         (resources / 'assets/icons').mkdir()
         for name in ('gooswan.png', 'gooswan.bmp'):

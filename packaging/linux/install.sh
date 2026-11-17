@@ -4,7 +4,7 @@ set -eu
 cd "$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd)"
 base=${XDG_DATA_HOME:-$HOME/.local/share}
 mkdir -p "$HOME/.local/lib/gooswan" "$HOME/.local/bin" "$base/applications" "$base/icons/hicolor/256x256/apps"
-cp -R gooswan assets README.md THIRD_PARTY_NOTICES.md "$HOME/.local/lib/gooswan/"
+cp -R gooswan assets docs README.md THIRD_PARTY_NOTICES.md "$HOME/.local/lib/gooswan/"
 ln -sf "$HOME/.local/lib/gooswan/gooswan" "$HOME/.local/bin/gooswan"
 cp assets/icons/gooswan.png "$base/icons/hicolor/256x256/apps/gooswan.png"
 # Desktop launchers need an absolute executable, independent of the GUI's PATH.

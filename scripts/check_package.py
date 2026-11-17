@@ -53,7 +53,7 @@ def check(archive_path, platform, smoke=False):
             else:
                 assert 'Terminal=false' in (resources / 'gooswan.desktop').read_text()
                 assert (resources / 'install.sh').is_file()
-        for name in ('README.md', 'THIRD_PARTY_NOTICES.md', 'assets/fonts/MPLUS1p-Regular.ttf', 'assets/fonts/OFL.txt', 'assets/icons/gooswan.bmp', 'assets/icons/gooswan.png'):
+        for name in ('README.md', 'THIRD_PARTY_NOTICES.md', 'docs/user-guide.md', 'docs/development.md', 'assets/fonts/MPLUS1p-Regular.ttf', 'assets/fonts/OFL.txt', 'assets/icons/gooswan.bmp', 'assets/icons/gooswan.png'):
             assert (resources / name).is_file(), name
         env = dict(os.environ, GOOSWAN_CONFIG_DIR=str(root / 'config'), SDL_AUDIODRIVER='dummy')
         for flag in ('--help', '--self-test'):
@@ -74,6 +74,8 @@ def check(archive_path, platform, smoke=False):
             launcher = home / '.local/bin/gooswan'
             assert launcher.resolve() == (installed / 'gooswan').resolve()
             assert (installed / 'assets/fonts/MPLUS1p-Regular.ttf').is_file()
+            assert (installed / 'docs/user-guide.md').is_file()
+            assert (installed / 'docs/development.md').is_file()
             assert f'Exec="{installed}/gooswan"' in (data / 'applications/gooswan.desktop').read_text()
             binary = launcher
         if smoke:
