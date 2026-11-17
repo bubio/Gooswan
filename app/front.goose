@@ -253,7 +253,8 @@ fn front_rotate_pads(k: i64, rotation: i64) -> i64 {
     return out;
 }
 fn front_keys() -> i64 {
-    if !gfx::focused() || front_dialog || front_settings || front_about || front_recent || front_menu_open || ui::wants_keyboard(front_ui) || ui::wants_mouse(front_ui) { return 0; }
+    // Mouse hover over the chrome does not capture keyboard/gamepad input.
+    if !gfx::focused() || front_dialog || front_settings || front_about || front_recent || front_menu_open || ui::wants_keyboard(front_ui) { return 0; }
     if gfx::key_down("Left Ctrl") || gfx::key_down("Right Ctrl") || gfx::key_down("Left GUI") || gfx::key_down("Right GUI") { return 0; }
     var keys: i64 = 0;
     for i in 11 {
@@ -379,7 +380,14 @@ fn front_main() {
     let period: f64 = (core::FRAME_CYCLES as f64) / core::CPU_HZ;
     var fps_time = gfx::time(); var fps_frame: i64 = 0;
     var vx: f32 = 0.0; var vy: f32 = 0.0; var vw: f32 = 0.0; var vh: f32 = 0.0;
+    // Cocoa activation and window presentation are asynchronous. Raise after
+    // the first frame has been presented, rather than during window creation.
+    var startup_frames: i64 = 0;
     while front_running && gfx::frame() {
+        if startup_frames < 2 {
+            startup_frames += 1;
+            if startup_frames == 2 { hostwindow_restore_focus(); }
+        }
         if front_dialog_focus_pending && hostwindow_focused() {
             if !gfx::focused() { gfx::inject_focus(true); }
             front_dialog_focus_pending = false;

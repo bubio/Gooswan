@@ -221,6 +221,20 @@ fn frontend_dialog_test() {
     if !gfx::open_headless(672, 482) { print("dialog_test gfx: ", gfx::error()); exit(1); }
     front_ui = front_make_ui(); front_apply_theme();
     frontend_dialog_frame();
+    // Hovering the menu bar must not capture the emulated console's keys.
+    gfx::inject_mouse(16.0, 12.0, gfx::MOUSE_LEFT, false);
+    gfx::inject_key("X", true); frontend_dialog_frame();
+    frontend_check("menu bar hover exercises mouse capture", ui::wants_mouse(front_ui));
+    frontend_check("menu bar hover allows game keys", front_keys() == core::KEY_A);
+    front_settings = true;
+    frontend_check("settings blocks game keys", front_keys() == 0);
+    front_settings = false;
+    front_menu_open = true;
+    frontend_check("open menu blocks game keys", front_keys() == 0);
+    front_menu_open = false;
+    gfx::inject_focus(false); frontend_dialog_frame();
+    frontend_check("unfocused window blocks game keys", front_keys() == 0);
+    gfx::inject_focus(true); gfx::inject_key("X", false); frontend_dialog_frame();
     gfx::inject_mouse(16.0, 12.0, gfx::MOUSE_LEFT, true); frontend_dialog_frame();
     gfx::inject_mouse(16.0, 12.0, gfx::MOUSE_LEFT, false); frontend_dialog_frame();
     frontend_check("File menu opens before native dialog", front_menu_open);
