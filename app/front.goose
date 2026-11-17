@@ -308,8 +308,26 @@ fn front_shortcuts() {
     if gfx::key_pressed("Left") { front_set_rotation(2); }
     if gfx::key_pressed("Right") { front_set_rotation(1); }
 }
+fn front_help() {
+    print("Gooswan - WonderSwan / WonderSwan Color emulator");
+    print("Usage: gooswan [<rom> [<frames> [check]]]");
+    print("       gooswan <option>");
+    print("");
+    print("With no arguments, open the app and choose File > Open ROM.");
+    print("<frames> limits emulation to the given number of frames.");
+    print("check verifies the presented picture against the emulated framebuffer.");
+    print("");
+    print("Options:");
+    print("  -h, --help          Show this help and exit");
+    print("  --self-test         Run settings and input tests without opening a window");
+    print("  --dialog-test       Run offscreen dialog-cancellation tests");
+    print("  --ui-smoke          Run GUI smoke tests");
+    print("  --ui-smoke-dialog   Run GUI smoke tests including the native picker");
+    print("  --cancel-test       Open the native picker for a manual cancellation test");
+}
 fn front_main() {
     let argv = args();
+    if argv.len > 1 && (argv[1] == "--help" || argv[1] == "-h") { front_help(); return; }
     if argv.len > 1 && argv[1] == "--dialog-test" { frontend_dialog_test(); return; }
     if argv.len > 1 && argv[1] == "--self-test" { frontend_test(); return; }
     var max_frames: i64 = 0;
@@ -318,6 +336,11 @@ fn front_main() {
     front_smoke = argv.len > 1 && (argv[1] == "--ui-smoke" || argv[1] == "--ui-smoke-dialog");
     front_smoke_dialog = argv.len > 1 && argv[1] == "--ui-smoke-dialog";
     front_cancel_live = argv.len > 1 && argv[1] == "--cancel-test";
+    if argv.len > 1 && argv[1].len > 0 && argv[1][0] == '-' && !front_smoke && !front_cancel_live {
+        print("Unknown option: ", argv[1]);
+        print("Run gooswan --help for usage.");
+        exit(1);
+    }
     settings_load();
     let w: i64 = if settings.rotation == 0 { 224 } else { 144 };
     let h: i64 = if settings.rotation == 0 { 144 } else { 224 };

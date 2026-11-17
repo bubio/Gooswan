@@ -17,6 +17,7 @@ for t in cpu_test ppu_test apu_test eeprom_test state_test; do
     echo "$out" | grep -q ", 0 failed" || { echo "FAIL: $t" >&2; exit 1; }
 done
 ./app/gooswan --self-test
+sh ./tests/cli_check.sh
 total=$(sst tests/data/*.json | awk -F'[= ]' '/total=/{t+=$3; p+=$5} END {print p"/"t}')
 echo "8086 corpus: $total"
 [ "$total" = "634406/646000" ] || { echo "FAIL: corpus baseline moved ($total)" >&2; exit 1; }

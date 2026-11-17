@@ -68,6 +68,7 @@ sh scripts/build.sh --test
 ```bash
 ./app/gooswan                     # open a ROM from File > Open ROM
 ./app/gooswan path/to/game.wsc
+./app/gooswan --help              # show CLI usage (-h also works), then exit
 ```
 
 Default controls:

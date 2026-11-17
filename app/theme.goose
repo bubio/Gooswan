@@ -1,6 +1,6 @@
 // Compact Nuklear chrome and readable toggles, following UsaProject's
 // docs/nuklear-reference.md. All dimensions are logical pixels.
-var FRONT_MENU_HEIGHT:   i64 = 26;
+var FRONT_MENU_HEIGHT: i64 = 26;
 let FRONT_STATUS_HEIGHT: i64 = 24;
 fn front_chrome_height() -> i64 { return FRONT_MENU_HEIGHT + FRONT_STATUS_HEIGHT; }
 let UI_TEXT = ui::Color { 220, 222, 226, 255 };
