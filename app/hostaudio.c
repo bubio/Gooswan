@@ -20,6 +20,8 @@ extern SDL_AudioStream *SDL_OpenAudioDeviceStream(uint32_t devid, const SDL_Audi
 extern bool SDL_ResumeAudioStreamDevice(SDL_AudioStream *stream);
 extern bool SDL_PutAudioStreamData(SDL_AudioStream *stream, const void *buf, int len);
 extern int SDL_GetAudioStreamQueued(SDL_AudioStream *stream);
+extern bool SDL_ClearAudioStream(SDL_AudioStream *stream);
+extern bool SDL_SetAudioStreamGain(SDL_AudioStream *stream, float gain);
 extern void SDL_DestroyAudioStream(SDL_AudioStream *stream);
 
 #define HA_INIT_AUDIO 0x00000010u
@@ -65,3 +67,6 @@ void hostaudio_close(void) {
     ha_stream = 0;
     SDL_QuitSubSystem(HA_INIT_AUDIO);
 }
+
+void hostaudio_clear(void) { if (ha_stream) SDL_ClearAudioStream(ha_stream); }
+void hostaudio_volume(int64_t value) { if (ha_stream) SDL_SetAudioStreamGain(ha_stream, (float)value / 100.0f); }

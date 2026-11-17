@@ -108,5 +108,18 @@ and the next step recorded in the session notes.
   16 KB WRAM, INS/OUTS port I/O, sprite latch, boot state and exact
   frame length, all found or confirmed by the differential sweep. See
   docs/sessions/2026-11-08-core-app-swanium-parity.md. Remaining: the
-  7 WSTimingTest quantisation cases, whatever the sweep still shows,
-  boot ROM execution and save states.
+  7 WSTimingTest quantisation cases and whatever the sweep still shows.
+  BIOS execution and save states were added with the desktop GUI on 2026-11-17.
+
+## Desktop GUI parity — 2026-11-17
+
+- Implemented Goose `ui`/Nuklear menus, ROM picker/history, pause/reset,
+  scale/fullscreen/rotation/filter controls, status/FPS/volume, settings/About,
+  keyboard/gamepad rebinding, and `settings.toml` persistence.
+- Core APIs now support versioned whole-machine save states and BIOS overlays.
+  Existing cartridge-save sidecars remain compatible and writes are atomic.
+- Settings and states are independent of Swanium. Native OS menu appearance is
+  outside this milestone; settings and About use in-app windows.
+- macOS native UI smoke and local WS/WSC/Crystal BIOS checks are recorded in
+  `docs/sessions/2026-11-17-desktop-gui.md`. Windows/Linux and physical-controller
+  checks remain separate from locally verified results.

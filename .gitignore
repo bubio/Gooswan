@@ -1,4 +1,5 @@
 # Goose build output
+.tools/
 .goose/
 *.o
 /gooswan

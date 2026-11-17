@@ -2,8 +2,8 @@
 // the frontend keeps them next to the ROM as <rom>.sav (cartridge
 // SRAM), <rom>.eep (cartridge EEPROM, only when fitted) and <rom>.iep
 // (the console's internal EEPROM), plus <rom>.rtc for a cartridge
-// clock's registers. Loaded after power-on, written on exit and every
-// 600 frames.
+// clock's registers. Loaded after power-on, written on transitions, exit and
+// every 150 frames. BIOS boots also persist the console EEPROM independently.
 
 fn save_path(path: const u8[:], kind: i64) -> u8[>..] {
     var name: u8[>..] = [];
@@ -13,21 +13,44 @@ fn save_path(path: const u8[:], kind: i64) -> u8[>..] {
     return name;
 }
 
-fn load_saves(path: const u8[:]) {
+fn load_saves(path: const u8[:], load_internal: bool = true) {
     for kind in core::SAVE_KINDS {
+        if kind == core::SAVE_INTERNAL_EEPROM && !load_internal { continue; }
         if core::save_size(kind) == 0 { continue; }
         var buf: u8[>..] = [];
         if read_file(save_path(path, kind), buf) { core::save_load(kind, buf); }
     }
 }
 
-fn save_saves(path: const u8[:]) {
+fn save_saves(path: const u8[:]) -> bool {
+    var ok = true;
     for kind in core::SAVE_KINDS {
         if core::save_size(kind) == 0 { continue; }
         var buf: u8[>..] = [];
         core::save_read(kind, buf);
-        write_file(save_path(path, kind), buf);
+        if !write_file_atomic(save_path(path, kind), buf) { ok = false; }
     }
+    return ok;
+}
+
+// Console storage is keyed by the BIOS in use, never the next-boot setting.
+// Cartridge sidecars are still written for backward compatibility.
+fn bios_eeprom_path(bios_kind: i64) -> u8[>..] {
+    let name = if bios_kind == 1 { "ws_irom.iep" } else if bios_kind == 2 { "wsc_irom.iep" } else { "wc_irom.iep" };
+    return config_path(str("bios/", name));
+}
+fn read_bios_eeprom(bios_kind: i64, out: u8[>..]&) -> bool {
+    if bios_kind < 1 || bios_kind > 3 || settings_dir.len == 0 { return false; }
+    let path = bios_eeprom_path(bios_kind);
+    if !file_exists(path) { return true; }
+    return read_file(path, out) && out.len == core::save_size(core::SAVE_INTERNAL_EEPROM);
+}
+fn save_bios_eeprom(bios_kind: i64) -> bool {
+    if bios_kind < 1 || bios_kind > 3 || settings_dir.len == 0 { return false; }
+    if !app_mkdirs(config_path("bios")) { return false; }
+    var data: u8[>..] = [];
+    core::save_read(core::SAVE_INTERNAL_EEPROM, data);
+    return write_file_atomic(bios_eeprom_path(bios_kind), data);
 }
 
 // Set a cartridge clock from the host's wall clock (UTC: the os

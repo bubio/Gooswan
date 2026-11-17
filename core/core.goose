@@ -18,6 +18,7 @@ import eeprom;
 import ppu;
 import rtc;
 import apu;
+import state;
 
 let SCREEN_W:     i64 = 224;
 let SCREEN_H:     i64 = 144;
@@ -125,4 +126,22 @@ fn save_load(kind: i64, data: const u8[:]) {
 fn has_rtc() -> bool { rtc_present }
 fn set_rtc_datetime(year: i64, month: i64, day: i64, weekday: i64, hour: i64, minute: i64, second: i64) {
     rtc_set_datetime(year, month, day, weekday, hour, minute, second);
+}
+
+// Optional BIOS overlay, aligned to the next 4 KiB block at the top of
+// the address space. Keep the image while disabled so a state can restore it.
+var boot_image:   u8[65536] = [0; 65536];
+var boot_size:    i64       = 0;
+var boot_enabled: bool      = false;
+
+fn power_on_with_bios(image: const u8[:], bios: const u8[:]) -> bool {
+    if bios.len == 0 || bios.len > 65536 { return false; }
+    power_on(image);
+    boot_size = ((bios.len + 4095) / 4096) * 4096;
+    for i in 65536 { boot_image[i] = 255; }
+    for i in bios.len { boot_image[i] = bios[i]; }
+    boot_enabled = true;
+    r[4] = 0;
+    sys_ctrl1 = if model_mono { 0x86 } else { 0x87 };
+    return true;
 }

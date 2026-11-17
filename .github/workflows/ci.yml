@@ -15,6 +15,7 @@ on:
       - "tests/**"
       - "scripts/**"
       - ".gitattributes"
+      - "THIRD_PARTY_NOTICES.md"
       - ".github/workflows/ci.yml"
   pull_request:
     paths: *paths
@@ -29,9 +30,6 @@ concurrency:
 permissions:
   contents: read
 
-env:
-  GOOSE_VERSION: v2026.4
-
 jobs:
   build:
     name: ${{ matrix.platform }}-${{ matrix.arch }}
@@ -43,24 +41,16 @@ jobs:
           - platform: linux
             arch: amd64
             runs-on: ubuntu-22.04
-            goose_asset: linux-x64.tar.gz
-            goose_sha256: 559ad7572df89fcd1273512d8679528bcdf876c252ec1f31608d3808b24125b3
           - platform: macos
             arch: arm64
             runs-on: macos-26
-            goose_asset: macos-arm64.tar.gz
-            goose_sha256: 8ef0b5a864a719bd095b8376bed069d0edc77a0ce8f3cb9d59fdf87291a3a922
           - platform: macos
             arch: x86_64
             runs-on: macos-26-intel
-            goose_asset: macos-x64.tar.gz
-            goose_sha256: 471beefd5787ff96b68c1a059ac4de0973a86a540efda9f2b084b540b5d73db0
           # goose build uses the runner's Visual Studio; the scripts run in Git Bash.
           - platform: windows
             arch: x86_64
             runs-on: windows-2025
-            goose_asset: windows-x64.zip
-            goose_sha256: 87ceb0ff2394e0ac4154b6c6b865c084cadbf236558cc956b114f37d6e619cdb
             exe: .exe
 
     runs-on: ${{ matrix.runs-on }}
@@ -71,21 +61,8 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
-      - name: Install Goose (pinned release, checksum verified)
-        env:
-          GOOSE_ASSET: ${{ matrix.goose_asset }}
-          GOOSE_SHA256: ${{ matrix.goose_sha256 }}
-        run: |
-          cd "$RUNNER_TEMP"
-          file="goose-${GOOSE_VERSION}-${GOOSE_ASSET}"
-          curl -fsSL -o "$file" "https://github.com/aardappel/goose/releases/download/${GOOSE_VERSION}/${file}"
-          if command -v sha256sum >/dev/null; then sum="sha256sum"; else sum="shasum -a 256"; fi
-          echo "${GOOSE_SHA256}  ${file}" | $sum -c -
-          case "$file" in
-            *.zip) unzip -q "$file"; dir="${file%.zip}" ;;
-            *) tar -xzf "$file"; dir="${file%.tar.gz}" ;;
-          esac
-          echo "$RUNNER_TEMP/$dir" >> "$GITHUB_PATH"
+      - name: Install Goose (project-local, checksum verified)
+        run: sh ./scripts/goose.sh --version
 
       # nasm builds the test ROMs; Mesa (lavapipe) lets the Linux
       # frontend smoke open a GPU device.
@@ -125,7 +102,7 @@ jobs:
 
       - name: Build and test
         run: |
-          goose --version
+          sh ./scripts/goose.sh --version
           sh ./scripts/build.sh --test
 
       # Only Linux has a GPU stand-in (lavapipe) on the hosted runners.
@@ -135,6 +112,16 @@ jobs:
           GOOSE_GFX_HEADLESS: "1"
           SDL_AUDIODRIVER: dummy
         run: ./app/gooswan tests/roms/WSHWTest.wsc 300 check
+
+      - name: GUI smoke test (headless, lavapipe)
+        if: runner.os == 'Linux'
+        env:
+          GOOSE_GFX_HEADLESS: "1"
+          SDL_AUDIODRIVER: dummy
+          GOOSWAN_CONFIG_DIR: ${{ runner.temp }}/gooswan-ui-smoke
+        run: |
+          ./app/gooswan --ui-smoke
+          ./app/gooswan --dialog-test
 
       - name: Upload artifact
         uses: actions/upload-artifact@v7

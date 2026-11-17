@@ -27,7 +27,7 @@ Gooswan separates a platform-independent core (`core/`, a Goose package with no 
 
 ## Download
 
-Prebuilt binaries are attached to [**Releases**](https://github.com/bubio/Gooswan/releases/latest). Each zip holds the `gooswan` binary and this README.
+Prebuilt binaries are attached to [**Releases**](https://github.com/bubio/Gooswan/releases/latest). Each zip holds the `gooswan` binary, this README third-party notices and the bundled GUI font.
 
 | Platform | Asset name |
 |----------|------------|
@@ -43,11 +43,14 @@ Prebuilt binaries are attached to [**Releases**](https://github.com/bubio/Gooswa
 
 ## Building
 
-Requires the Goose compiler on `PATH` (CI pins `v2026.4`, see `.github/workflows/ci.yml`).
+The project downloads its pinned Goose compiler (`v2026.4`) on first use. No global Goose installation or `PATH` setup is needed. Requires `curl`, `tar` (or `unzip` on Windows), a SHA-256 tool (`shasum` or `sha256sum`), and a C compiler supported by Goose. On Windows, run the scripts from Git Bash with Visual Studio installed.
+
+The compiler and its bundled libraries are kept in `.tools/goose/`, which is excluded from Git. Build caches default to the ignored project-local `.goose/` directory (`GOOSE_HOME` can override this). Both local builds and CI use `scripts/goose.sh`; the version and platform checksums are defined together in that script. To update Goose, change the version and all checksums there. Installed versions remain separate, and subsequent runs work offline.
 
 ```bash
-goose build app/gooswan.goose    # frontend -> app/gooswan
-goose build tools/sst.goose      # test harness / headless runner -> tools/sst
+sh scripts/goose.sh --version                 # download / verify the local compiler
+sh scripts/goose.sh build app/gooswan.goose    # frontend -> app/gooswan
+sh scripts/goose.sh build tools/sst.goose      # test harness / headless runner -> tools/sst
 ```
 
 Full check (core purity, lint, both builds and the regression battery). Runs on Linux, macOS and Git Bash on Windows; the battery needs `nasm`, `curl` and `unzip` for the test data:
@@ -63,6 +66,7 @@ sh scripts/build.sh --test
 ## Usage
 
 ```bash
+./app/gooswan                     # open a ROM from File > Open ROM
 ./app/gooswan path/to/game.wsc
 ```
 
@@ -72,25 +76,68 @@ Default controls:
 - `W A S D` = Y-pad
 - `X` = A, `Z` = B
 - `Enter` = Start
-- `Esc` = quit
+- Gamepad: D-pad = X-pad, South = B, East = A, Start = Start
+- `Esc` = close settings/About or leave fullscreen
 
-Save data is written next to the ROM on exit and every 600 frames: `<rom>.sav`, `<rom>.eep`, `<rom>.iep`, and `<rom>.rtc` for carts with a clock.
+The File / Emu / View menus expose ROM history, save/load state, settings, pause/reset, 1–4x window scales, fullscreen, left/right rotation, and nearest/bilinear sampling. The game image retains its aspect ratio. The compact Nuklear UI uses the bundled M PLUS 1p Japanese font, readable selection indicators, grouped settings tabs and scrollable ROM history; its layout follows UsaProject. Keyboard and gamepad buttons can be rebound in **Settings > Input**; Escape cancels capture. Ctrl+O/S/L/P/R opens a ROM, saves/loads state, pauses, or resets. Ctrl+, opens settings, Ctrl+Q quits, and F11 toggles fullscreen. Command also works in place of Ctrl on macOS.
+
+Save data is written next to the ROM on ROM switches, exit and every 150 frames: `<rom>.sav`, `<rom>.eep`, `<rom>.iep`, and `<rom>.rtc` for carts with a clock.
 
 `./app/gooswan <rom> <frames> check` runs a fixed number of frames and verifies the presented picture against the emulated framebuffer (works headless with `GOOSE_GFX_HEADLESS=1` and lavapipe).
+
+### Settings and BIOS
+
+Settings are stored as **`settings.toml`** in the application configuration directory:
+
+- macOS: `~/Library/Application Support/gooswan/`
+- Linux: `$XDG_CONFIG_HOME/gooswan/` (default `~/.config/gooswan/`)
+- Windows: `%APPDATA%/gooswan/`
+
+`GOOSWAN_CONFIG_DIR` overrides this directory for portable setups and tests. Changes are saved atomically. Missing settings use defaults; a syntactically invalid file is preserved and settings writes are disabled until it is repaired and the app restarted. Unknown keys are ignored; invalid key names use the default binding. Settings are independent of Swanium.
+
+```toml
+scale = 3
+volume = 100
+fullscreen = false
+rotation = 0 # 0=normal, 1=right, 2=left; opening a ROM follows its orientation flag
+bilinear = false
+rotate_input_with_screen = true
+bios = 0 # 0=direct, 1=WonderSwan, 2=WonderSwan Color, 3=SwanCrystal
+recent_files = []
+
+[keyboard]
+A = "X"
+B = "Z"
+
+[gamepad]
+A = 1 # SDL East
+B = 0 # SDL South; -1 means unbound
+```
+
+Place user-supplied BIOS images in the configuration directory's `bios/` folder as `ws_irom.bin`, `wsc_irom.bin`, or `wc_irom.bin`. **Settings > ROM** selects the BIOS used on the next load/reset; a missing BIOS falls back to direct cartridge boot with a message. **Emu > BIOS Settings** boots the selected BIOS without a cartridge and briefly holds Start to open its setup screen. BIOS images are not distributed.
+
+BIOS-mode internal EEPROM is saved atomically beside the BIOS as `bios/ws_irom.iep`, `bios/wsc_irom.iep`, or `bios/wc_irom.iep`. Personal data such as the name and birthday survives BIOS-only resets, ROM changes and application restarts. Each BIOS has its own console data, shared with cartridge sessions booted through that BIOS. Existing ROM-local `.iep` files are imported when the console save is absent and continue to be written for compatibility; direct boot continues to use the ROM-local file. Unreadable or damaged console EEPROM files stop the requested boot without replacing the current machine.
+
+Save states use one slot per ROM path under `states/` in the configuration directory. They include CPU, RAM, peripherals, timing, framebuffer and BIOS overlay state, with version, ROM identity and integrity checks. They are Gooswan-specific; Swanium save states are not compatible. Existing cartridge save files remain beside the ROM.
 
 ### Test harness
 
 ```bash
 ./tools/sst [v20] <case-file.json>...     # SingleStepTests corpora
 ./tools/sst ws <rom> [suite] [fb|wav|fbwav]  # headless ROM runner (framebuffer / audio dump)
-./tools/sst cpu_test | ppu_test | apu_test | eeprom_test  # core self-tests
+./tools/sst cpu_test | ppu_test | apu_test | eeprom_test | state_test
+./app/gooswan --self-test                # TOML/settings/input behavior
+GOOSWAN_CONFIG_DIR="$PWD/.goose/ui-smoke" ./app/gooswan --ui-smoke
+./app/gooswan --dialog-test              # offscreen modal-cancellation regression
+GOOSWAN_CONFIG_DIR="$PWD/.goose/cancel-test" ./app/gooswan --cancel-test # click Cancel in the native picker
+./tools/sst bios_test <bios> mono|color <output.ppm> # optional user-owned BIOS check
 sh tests/ws_test_suite.sh                 # ws-test-suite, opt-in (WS_TEST_SUITE=<dir>)
 python3 tools/diff_swanium.py <rom> [frames]  # needs a sibling ../Swanium checkout
 ```
 
 ## Status
 
-M1–M4 are complete; M5 (frontend polish: gamepad, scaling) and M6 (Swanium parity) are in progress. See [ROADMAP.md](ROADMAP.md) and the session notes in [docs/sessions](docs/sessions).
+M1–M4 are complete. The M5 desktop GUI now includes menus, persistent TOML settings, keyboard/gamepad remapping, display controls, save states and BIOS boot. M6 accuracy parity remains in progress; Windows/Linux GUI behavior and physical-controller validation still need platform testing. See [ROADMAP.md](ROADMAP.md) and the session notes in [docs/sessions](docs/sessions).
 
 | Test | Result |
 |------|--------|
@@ -113,7 +160,7 @@ M1–M4 are complete; M5 (frontend polish: gamepad, scaling) and M6 (Swanium par
 ## Architecture
 
 ```text
-app/ (SDL3 window, keyboard, audio out, save files via Goose gfx)
+app/ (Goose gfx/ui, SDL3 host adapters, TOML settings, save files)
                      |
                      v  core/core.goose (public API)
 core/: CPU (V30MZ), Bus, Interrupts, Timers, DMA, PPU, APU, EEPROM, Cartridge, RTC

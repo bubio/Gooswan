@@ -42,6 +42,7 @@ var io_always_c: i64[256] = [0; 256];  // SPHINX colour-mode port always-set rea
 
 fn rd8(p: i64) -> u8 {
     if !ws_mode { return mem[p]; }
+    if boot_enabled && p >= 0x100000 - boot_size { return boot_image[p - (0x100000 - boot_size)]; }
     if p < 0x10000 { if model_mono && p >= 0x4000 { return 0x90; } return mem[p]; }  // mono: 16 KB of WRAM, open bus above
     if p < 0x20000 { if sram_size == 0 { return 0x90; } return sram[((ram_bank() << 16) | (p & 0xFFFF)) % sram_size]; }
     if rom.len == 0 { return 0xFF; }
@@ -169,7 +170,10 @@ fn port_wr(p: i64, v: i64) {
     if p == IEEP_CTRL + 1 { io_ports[IEEP_CTRL + 1] = (v & 1) as! u8; }  // IEEPROM-adjacent control: only bit 0 exists
     if !cart_eeprom && p >= CEEP_DATA && p <= CEEP_CTRL + 1 { io_ports[p] = 0; }  // no cart EEPROM: writes ignored
     if p == CEEP_CTRL && cart_eeprom { ce_control(v); }  // cart EEPROM control: high nibble selects the operation
-    if p == SYSTEM_CTRL1 { sys_ctrl1 = (sys_ctrl1 & 0x87) | (v & 0x0C); }
+    if p == SYSTEM_CTRL1 {
+        if (v & 0x80) != 0 { boot_enabled = false; }
+        sys_ctrl1 = (sys_ctrl1 & 0x87) | (v & 0x0C);
+    }
     else if p == KEYPAD { key_select = v & 0x70; }  // only select bits 4-6 exist
     else if p == INT_CAUSE_CLEAR { int_cause = int_cause & ~v; }
     else if p == RTC_CMD { if rtc_present { rtc_write_command(v); } }
@@ -371,6 +375,11 @@ var dbg_ring_pos: i64       = 0;
 var dbg_ring_on:  bool      = false;  // off in normal play: recording costs a memory read per instruction (sst run turns it on with GW_TRACE)
 
 fn ws_boot() {
+    boot_enabled = false; boot_size = 0;
+    for i in 32256 { fb[i] = 0; }
+    for i in 4 { ch_period[i] = 0; ch_idx[i] = 0; ch_sample[i] = 0; }
+    sweep_ctr = 0; sweep_step = 0; fast_primed = false;
+    voice_lp_prev = 0; voice_level = 0; gdma_stall = 0;
     ws_mode = true;
     cpu_v20 = true;
     cpu_mz = true;
