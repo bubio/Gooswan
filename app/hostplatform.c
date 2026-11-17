@@ -20,7 +20,7 @@ typedef struct SDL_Gamepad SDL_Gamepad;
 typedef struct SDL_Mutex SDL_Mutex;
 typedef struct SDL_IOStream SDL_IOStream;
 typedef struct SDL_Surface SDL_Surface;
-extern SDL_IOStream *SDL_IOFromFile(const char *, const char *);
+extern SDL_IOStream *SDL_IOFromConstMem(const void *, size_t);
 extern SDL_Surface *SDL_LoadBMP_IO(SDL_IOStream *, bool);
 extern bool SDL_SetWindowIcon(SDL_Window *, SDL_Surface *);
 extern void SDL_DestroySurface(SDL_Surface *);
@@ -85,12 +85,9 @@ void hostplatform_close(void) {
     /* A native dialog may still own its callback at exit. The mutex and
        result stay process-owned until then; never free callback storage early. */
 }
-void hostwindow_icon(hs_in path) {
-    if (!window) return;
-    char *name = hs_string(path);
-    if (!name) return;
-    SDL_IOStream *io = SDL_IOFromFile(name, "rb");
-    free(name);
+void hostwindow_icon(hs_in data) {
+    if (!window || data.len <= 0) return;
+    SDL_IOStream *io = SDL_IOFromConstMem(data.data, (size_t)data.len);
     if (!io) return;
     SDL_Surface *surface = SDL_LoadBMP_IO(io, true);
     if (surface) { SDL_SetWindowIcon(window, surface); SDL_DestroySurface(surface); }

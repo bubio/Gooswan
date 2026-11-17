@@ -4,9 +4,17 @@
 
 ## Starting the app
 
-Extract the entire release ZIP. On macOS, move `Gooswan.app` to Applications. On Windows, open `Gooswan/Gooswan.exe`. On Linux, run `Gooswan/gooswan` directly, or run `sh Gooswan/install.sh` to install for the current user without sudo. The installer places the app in `~/.local/lib/gooswan/`, a command-line launcher in `~/.local/bin/`, and a desktop entry/icon under `$XDG_DATA_HOME` (default `~/.local/share/`). Add `~/.local/bin` to PATH for terminal use.
+Extract the release ZIP to get the `Gooswan/` folder, containing the application, README, guide and licenses.
 
-Keep `assets/` beside the Windows/Linux executable. SDL3 is included in the application; you do not need to install it separately. On Linux, a working desktop session and a Vulkan-capable graphics driver are needed for the SDL GPU renderer. The Linux release targets the glibc baseline of Ubuntu 22.04 (Debian 12 is also supported).
+- macOS: move `Gooswan/Gooswan.app` to Applications and open it.
+- Windows: open `Gooswan/Gooswan.exe`.
+- Linux deb: install the enclosed `.deb` with `sudo apt install ./Gooswan/gooswan_<version>_amd64.deb`.
+- Linux rpm: install the enclosed `.rpm` with `sudo dnf install ./Gooswan/gooswan-<version>-1.x86_64.rpm`.
+- Linux AppImage: run `chmod +x Gooswan/Gooswan.AppImage`, then open it. If FUSE is unavailable, run `APPIMAGE_EXTRACT_AND_RUN=1 ./Gooswan/Gooswan.AppImage`.
+
+Replace `<version>` with the downloaded release version. deb/rpm install a menu entry and the `gooswan` command; uninstall with `sudo apt remove gooswan` or `sudo dnf remove gooswan`. SDL3, the Japanese font and the window icon are embedded in the executable. The Windows EXE, macOS app and AppImage can be moved independently of the wrapper documents. Keep license documents when redistributing.
+
+Linux needs a working desktop session and a Vulkan-capable graphics driver. Builds use Ubuntu 22.04's glibc 2.35 baseline; CI checks deb on Ubuntu 22.04 / Debian 12, rpm on Fedora 43, and AppImage on Ubuntu 22.04 / Fedora 43. AppImage uses the system window/audio libraries and driver; deb/rpm declare runtime library dependencies.
 
 The macOS app is ad-hoc signed but not notarized. If Gatekeeper blocks a download you trust, run:
 

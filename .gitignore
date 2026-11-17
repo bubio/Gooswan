@@ -1,3 +1,5 @@
+.DS_Store
+
 # Goose build output
 .tools/
 .goose/
@@ -24,6 +26,7 @@ tools/swprobe/target/
 
 # Desktop distribution artifacts
 /dist/
+/release-assets/
 /gooswan-*.zip
 __pycache__/
 /app/gooswan.exe

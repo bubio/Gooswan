@@ -37,15 +37,43 @@ Build a native desktop distribution (Python 3 is required for packaging):
 ```bash
 sh scripts/build.sh
 sh scripts/package_zip.sh app/gooswan macos arm64   # Intel Mac: x86_64
-# Linux: sh scripts/package_zip.sh app/gooswan linux amd64
 # Windows (Git Bash): sh scripts/package_zip.sh app/gooswan.exe windows x86_64
-python3 scripts/check_package.py gooswan-macos-arm64.zip macos
-open dist/Gooswan.app                             # local macOS app
+# Linux: sh scripts/package_zip.sh app/gooswan linux amd64
+python3 scripts/check_package.py dist/releases/gooswan-1.1.0-macos-arm64.zip macos --arch arm64
+open dist/macos-arm64/Gooswan.app
 ```
 
-Run packaging on the target OS. macOS packaging uses Xcode Command Line Tools (`vtool`, `codesign`, `ditto`) and leaves a launchable app in `dist/Gooswan.app`. `scripts/build.sh` targets macOS 13.5 by default (`MACOSX_DEPLOYMENT_TARGET` can override it), and packaging records the binary's actual minimum OS version. The application version is defined in `VERSION`. Icons live in `assets/icons/`; regenerate ICNS/ICO/PNG/BMP derivatives from `AppIcon.png` on macOS with `python3 scripts/generate_icons.py`.
+Use the actual `VERSION` in verification filenames. All outputs are versioned ZIPs in `dist/releases/`. macOS also refreshes `dist/macos-<arch>/Gooswan.app` and the original `dist/Gooswan.app` launch path. Packaging runs on the target OS; supported targets are Linux amd64, Windows x86_64, and macOS arm64/x86_64. Linux creates three ZIPs (deb, rpm and AppImage); Windows and each macOS architecture create one. Every ZIP has the same wrapper:
 
-CI builds all four targets, packages them on their native runners, and verifies each ZIP after extracting outside the checkout. Linux additionally runs the packaged GUI smoke test with lavapipe. Workflow artifacts contain the complete ZIPs; release publishing uploads those same verified archives. Windows keeps a console-enabled development binary for CLI tests and sets the GUI subsystem only in the packaged copy.
+```text
+Gooswan/
+  <Gooswan.exe | Gooswan.app | gooswan_*.deb | gooswan-*.rpm | Gooswan.AppImage>
+  README.md
+  THIRD_PARTY_NOTICES.md
+  licenses/OFL.txt
+  docs/user-guide.md
+```
+
+The AppImage wrapper also includes `licenses/APPIMAGE_NOTICES.txt`. The Japanese font and SDL window icon are embedded at compile time on every OS using Goose's `embed_file`; no sidecar assets are needed. The macOS bundle also includes its ICNS, documentation and licenses. deb/rpm install `/usr/bin/gooswan`, a desktop entry and icon under `/usr/share`, documentation under `/usr/share/doc/gooswan`, and font licensing under `/usr/share/licenses/gooswan`. AppImage contains the same tree and a relocatable `AppRun` launcher. Its runtime license is included inside the image too.
+
+macOS packaging uses Xcode Command Line Tools (`vtool`, `codesign`, `ditto`). `scripts/build.sh` targets macOS 13.5 by default (`MACOSX_DEPLOYMENT_TARGET` can override it); packaging records the binary's actual minimum OS version and applies an ad-hoc signature. Developer ID signing and notarization are not configured. Windows packaging embeds ICO, VERSIONINFO and an asInvoker/PerMonitorV2 manifest with Windows resource APIs, then selects the GUI subsystem in the distribution copy. Development binaries retain their console for tests.
+
+Linux packaging requires `dpkg-dev`, `rpm`, `cpio`, `file`, and `desktop-file-utils` in addition to the normal build tools. `scripts/appimage_tools.py` downloads official appimagetool 1.9.1 and type2-runtime 20251108, verifies fixed SHA-256 values even for cached copies, and uses `.tools/appimage/`. Passing `--runtime-file` prevents appimagetool from downloading a changing runtime. FUSE is not needed during packaging or CI. The embedded SDL remains static; `dpkg-shlibdeps` and RPM's automatic dependency generator scan linked libraries, and packaging separately declares SDL's dynamically opened window/audio/Vulkan libraries. Driver implementations remain system-provided.
+
+RPM's `Release: 1` is a package revision, separate from `VERSION`. The project does not currently declare a first-party license, so the RPM metadata uses `LicenseRef-Gooswan` rather than assigning an open-source license; third-party notices and OFL are installed with the package.
+
+CI builds all four native targets, runs the regression suite, then verifies all six ZIPs after extraction outside the checkout. It moves each payload away from its wrapper docs before launch and checks the CPU architecture, embedded assets and platform metadata. Linux additionally runs packaged GUI smoke tests with lavapipe, installs/removes deb on Ubuntu 22.04 and Debian 12 and rpm on Fedora 43, and exercises the real AppImage runtime on Ubuntu 22.04 and Fedora 43. Clean-distribution checks run as root only inside disposable containers; locally they can be invoked with the same `docker run` command as CI, after placing the Linux ZIPs in `release-assets/`.
+
+The final validation job requires exactly six expected filenames and writes `SHA256SUMS`. On a published release, the tag must equal `VERSION` or `vVERSION`. Publishing downloads the same validated artifact, checks its checksums, then attaches six ZIPs and `SHA256SUMS`. This follows GitHub's [workflow artifact sharing](https://docs.github.com/en/actions/tutorials/store-and-share-data) mechanism. The bundle is also available as the `release-bundle` workflow artifact on ordinary CI runs.
+
+```bash
+# After collecting all six ZIPs into one directory:
+python3 scripts/release_assets.py dist/releases
+# Optional tag consistency check:
+python3 scripts/release_assets.py dist/releases --tag v1.1.0
+```
+
+Icons live in `assets/icons/`; regenerate ICNS/ICO/PNG/BMP derivatives from `AppIcon.png` on macOS with `python3 scripts/generate_icons.py`. Rebuild afterward to refresh embedded assets.
 
 ## Test harness and GUI checks
 

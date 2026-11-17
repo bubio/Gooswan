@@ -1,5 +1,6 @@
 #!/bin/sh
-# Native desktop package; run on the same OS as the input binary.
+# Native release ZIPs in dist/releases/; Linux produces deb/rpm/AppImage ZIPs.
+# Run on the same OS as the input binary.
 set -eu
 cd "$(dirname "$0")/.."
 if [ "$#" -ne 3 ]; then

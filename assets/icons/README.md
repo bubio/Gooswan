@@ -18,9 +18,11 @@ The generated matte contained near-transparent exterior noise. `scripts/normaliz
 
 Run `python3 scripts/generate_icons.py` on macOS with Xcode Command Line Tools (Swift/AppKit and sips). It requires an alpha-capable master, normalizes the export matte, and produces:
 
-- `Gooswan.icns`: 16–1024 pixel PNG representations for macOS.
+- `Gooswan.icns`: Apple `iconutil` output from the ten standard/Retina iconset slots (16–1024 pixels). Small representations use the native ICNS encoding rather than hand-packed PNG chunks.
 - `Gooswan.ico`: six RGBA PNG representations (16, 32, 48, 64, 128, 256 pixels), advertised as 32-bit for Windows.
 - `gooswan.png`: 256-pixel Linux/README icon.
-- `gooswan.bmp`: 32-bit BMP with alpha masks, used for SDL window icons.
+- `gooswan.bmp`: 32-bit BMP with alpha masks, embedded at compile time for SDL window icons.
 
-The macOS bundle uses the ICNS; Windows packaging embeds the ICO; Windows/Linux SDL windows use the BMP; the Linux desktop installer copies the PNG. Native packaging picks up these files on each platform.
+The macOS bundle uses the ICNS; Windows packaging embeds the ICO; SDL windows use the embedded BMP; Linux packages install the PNG with the desktop entry. Rebuild the executable after updating the BMP. Native packaging picks up the platform icons on each platform.
+
+The macOS package checker runs `scripts/check_icons.swift` to decode every iconset slot and compare its pixels against the master resized to that resolution. This catches small-icon corruption that a valid ICNS header and correct image dimensions do not detect.

@@ -23,12 +23,14 @@ with tempfile.TemporaryDirectory() as temp:
         images[size] = path.read_bytes()
     (icons / 'gooswan.png').write_bytes(images[256])
     subprocess.run(['sips', '-s', 'format', 'bmp', str(icons / 'gooswan.png'), '--out', str(icons / 'gooswan.bmp')], check=True, stdout=subprocess.DEVNULL)
-    chunks = []
-    for size, kind in ((16, b'icp4'), (32, b'icp5'), (64, b'icp6'), (128, b'ic07'), (256, b'ic08'), (512, b'ic09'), (1024, b'ic10')):
-        data = images[size]
-        chunks.append(kind + struct.pack('>I', len(data) + 8) + data)
-    data = b''.join(chunks)
-    (icons / 'Gooswan.icns').write_bytes(b'icns' + struct.pack('>I', len(data) + 8) + data)
+    # iconutil encodes the legacy small representations correctly and supplies
+    # separate Retina slots. Raw PNGs in icp4/icp5 can decode as corrupt pixels.
+    iconset = Path(temp) / 'Gooswan.iconset'
+    iconset.mkdir()
+    for size in (16, 32, 128, 256, 512):
+        (iconset / f'icon_{size}x{size}.png').write_bytes(images[size])
+        (iconset / f'icon_{size}x{size}@2x.png').write_bytes(images[size * 2])
+    subprocess.run(['iconutil', '-c', 'icns', str(iconset), '-o', str(icons / 'Gooswan.icns')], check=True)
     sizes = (16, 32, 48, 64, 128, 256)
     offset = 6 + 16 * len(sizes)
     entries = []

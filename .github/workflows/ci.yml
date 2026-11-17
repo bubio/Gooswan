@@ -2,8 +2,8 @@ name: CI
 
 # One matrix for every platform Goose ships a release for
 # (no linux-arm64 asset upstream, so Linux is amd64 only).
-# Every run builds and verifies a desktop package. Published releases
-# attach the exact same verified gooswan-<platform>-<arch>.zip artifacts.
+# Four native builds produce six verified release ZIPs. Linux packages are
+# also installed and removed in disposable Debian/Ubuntu/Fedora containers.
 
 on:
   push:
@@ -72,16 +72,19 @@ jobs:
         with:
           python-version: '3.12'
 
+      - name: Test release packaging contracts
+        run: python tests/package_test.py
+
       - name: Install Goose (project-local, checksum verified)
         run: sh ./scripts/goose.sh --version
 
       # nasm builds the test ROMs; Mesa (lavapipe) lets the Linux
       # frontend smoke open a GPU device.
-      - name: Install nasm and Mesa (Linux)
+      - name: Install Linux test and packaging tools
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update
-          sudo apt-get install -y nasm mesa-vulkan-drivers
+          sudo apt-get install -y nasm mesa-vulkan-drivers dpkg-dev rpm cpio desktop-file-utils file
 
       - name: Install nasm (macOS)
         if: runner.os == 'macOS'
@@ -139,43 +142,100 @@ jobs:
 
       - name: Verify relocated desktop package
         if: runner.os != 'Linux'
-        run: python scripts/check_package.py "gooswan-${{ matrix.platform }}-${{ matrix.arch }}.zip" "${{ matrix.platform }}"
+        run: |
+          version=$(cat VERSION)
+          python scripts/check_package.py "dist/releases/gooswan-$version-${{ matrix.platform }}-${{ matrix.arch }}.zip" "${{ matrix.platform }}" --arch "${{ matrix.arch }}"
 
       - name: Packaged GUI smoke test (Linux)
         if: runner.os == 'Linux'
         env:
           GOOSE_GFX_HEADLESS: "1"
           SDL_AUDIODRIVER: dummy
-        run: python scripts/check_package.py "gooswan-${{ matrix.platform }}-${{ matrix.arch }}.zip" linux --smoke
+        run: |
+          for archive in dist/releases/gooswan-*-linux-x86_64-*.zip; do
+            python scripts/check_package.py "$archive" linux --arch x86_64 --smoke
+          done
 
       - name: Upload artifact
         uses: actions/upload-artifact@v7
         with:
           name: gooswan-${{ matrix.platform }}-${{ matrix.arch }}
-          path: gooswan-${{ matrix.platform }}-${{ matrix.arch }}.zip
+          path: dist/releases/*.zip
+          if-no-files-found: error
+
+  linux-install:
+    name: Install ${{ matrix.format }} (${{ matrix.image }})
+    needs: build
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - image: ubuntu:22.04
+            format: deb
+          - image: debian:12
+            format: deb
+          - image: fedora:43
+            format: rpm
+          - image: ubuntu:22.04
+            format: appimage
+          - image: fedora:43
+            format: appimage
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/download-artifact@v8
+        with:
+          name: gooswan-linux-amd64
+          path: release-assets
+      - name: Verify native package in a clean distribution
+        run: |
+          docker run --rm \
+            --volume "$PWD:/workspace:ro" --workdir /workspace \
+            "${{ matrix.image }}" bash scripts/check_linux_install.sh "${{ matrix.format }}"
+
+  validate-release:
+    name: Validate six release assets and checksums
+    needs: [build, linux-install]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/download-artifact@v8
+        with:
+          pattern: gooswan-*
+          merge-multiple: true
+          path: release-assets
+      - name: Validate release names and VERSION
+        env:
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+        run: |
+          if [ -n "$RELEASE_TAG" ]; then
+            python3 scripts/release_assets.py release-assets --tag "$RELEASE_TAG"
+          else
+            python3 scripts/release_assets.py release-assets
+          fi
+      - uses: actions/upload-artifact@v7
+        with:
+          name: release-bundle
+          path: release-assets/*
           if-no-files-found: error
 
   publish-release:
-    needs: build
+    needs: validate-release
     if: github.event_name == 'release'
     runs-on: ubuntu-latest
     permissions:
       contents: write
-
     steps:
-      - uses: actions/checkout@v7
-
-      - name: Download build artifacts
-        uses: actions/download-artifact@v8
+      - uses: actions/download-artifact@v8
         with:
+          name: release-bundle
           path: release-assets
-
-      - name: Upload verified desktop packages
+      - name: Verify checksums and upload packages
+        working-directory: release-assets
         env:
           GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
           RELEASE_TAG: ${{ github.event.release.tag_name }}
         run: |
-          shopt -s nullglob globstar
-          zips=(release-assets/**/gooswan-*.zip)
-          [ "${#zips[@]}" -eq 4 ] || { echo "Error: expected four desktop packages." >&2; exit 1; }
-          gh release upload "$RELEASE_TAG" "${zips[@]}" --clobber
+          sha256sum --check SHA256SUMS
+          gh release upload "$RELEASE_TAG" gooswan-*.zip SHA256SUMS --clobber
