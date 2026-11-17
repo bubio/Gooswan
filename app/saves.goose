@@ -2,8 +2,8 @@
 // the frontend keeps them next to the ROM as <rom>.sav (cartridge
 // SRAM), <rom>.eep (cartridge EEPROM, only when fitted) and <rom>.iep
 // (the console's internal EEPROM), plus <rom>.rtc for a cartridge
-// clock's registers. Loaded after power-on, written on transitions, exit and
-// every 150 frames. BIOS boots also persist the console EEPROM independently.
+// clock's registers. Loaded after power-on, written on ROM/BIOS switches,
+// reset and exit. BIOS boots also persist the console EEPROM independently.
 
 fn save_path(path: const u8[:], kind: i64) -> u8[>..] {
     var name: u8[>..] = [];

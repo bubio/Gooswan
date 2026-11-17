@@ -431,7 +431,6 @@ fn front_main() {
                 break;
             }
             front_audio_pump(); ran += 1; front_frames += 1;
-            if front_frames % 150 == 0 { front_save_media(); }
             if max_frames > 0 && front_frames >= max_frames { front_running = false; break; }
         }
         if ran == 0 { sleep_ms(1); }

@@ -39,7 +39,7 @@ Vertical games are detected from the cartridge footer and rotate the screen auto
 
 ## Save data
 
-Keep ROMs in a writable folder. Save data is written next to the ROM on ROM switches, exit and every 150 frames: `<rom>.sav`, `<rom>.eep`, `<rom>.iep`, and `<rom>.rtc` for carts with a clock.
+Keep ROMs in a writable folder. Save data is written next to the ROM on ROM/BIOS switches, reset and normal exit: `<rom>.sav`, `<rom>.eep`, `<rom>.iep`, and `<rom>.rtc` for carts with a clock. Changes remain in memory during play, so a crash or forced quit can lose changes since the last save.
 
 ## Settings and BIOS
 
