@@ -21,3 +21,10 @@ tests/roms/
 
 # Swanium differential probe build output
 tools/swprobe/target/
+
+# Desktop distribution artifacts
+/dist/
+/gooswan-*.zip
+__pycache__/
+/app/gooswan.exe
+/tools/sst.exe

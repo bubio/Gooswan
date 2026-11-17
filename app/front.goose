@@ -20,6 +20,7 @@ extern fn hostaudio_clear();
 extern fn hostaudio_volume(value: i64);
 extern fn hostaudio_close();
 extern fn hostplatform_open();
+extern fn hostwindow_icon(path: const u8[:]);
 extern fn host_absolute_path(path: const u8[:], out: u8[:]) -> i64;
 extern fn hostplatform_close();
 extern fn hostwindow_focused() -> bool;
@@ -346,6 +347,10 @@ fn front_main() {
     let h: i64 = if settings.rotation == 0 { 144 } else { 224 };
     if !gfx::open("Gooswan", w * settings.scale, h * settings.scale + (if front_check { 0 } else { front_chrome_height() }), gfx::NO_VSYNC | gfx::WINDOW_RESIZABLE) { print("gfx: ", gfx::error()); exit(3); }
     hostplatform_open();
+    let icon = str(resource_dir(), "assets/icons/gooswan.bmp");
+    let checkout_icon = str(resource_dir(), "../assets/icons/gooswan.bmp");
+    if file_exists(icon) { hostwindow_icon(icon); }
+    else if file_exists(checkout_icon) { hostwindow_icon(checkout_icon); }
     front_resize();
     front_ui = front_make_ui();
     if front_ui.id == 0 { print("ui: ", ui::error()); exit(3); }

@@ -7,6 +7,10 @@
 # project-local Goose compiler (downloaded on first use).
 set -e
 cd "$(dirname "$0")/.."
+# Match Swanium's deployment floor instead of inheriting the build host's SDK.
+if [ "$(uname -s)" = Darwin ]; then
+    export MACOSX_DEPLOYMENT_TARGET="${MACOSX_DEPLOYMENT_TARGET:-13.5}"
+fi
 sh ./scripts/check_core.sh
 sh ./scripts/lint.sh
 sh ./scripts/goose.sh build tools/sst.goose

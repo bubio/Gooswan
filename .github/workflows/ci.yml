@@ -2,8 +2,8 @@ name: CI
 
 # One matrix for every platform Goose ships a release for
 # (no linux-arm64 asset upstream, so Linux is amd64 only).
-# On a published release the same run packages each build into
-# gooswan-<platform>-<arch>.zip and attaches it.
+# Every run builds and verifies a desktop package. Published releases
+# attach the exact same verified gooswan-<platform>-<arch>.zip artifacts.
 
 on:
   push:
@@ -11,6 +11,10 @@ on:
     paths: &paths
       - "core/**"
       - "app/**"
+      - "assets/**"
+      - "packaging/**"
+      - "VERSION"
+      - "README.md"
       - "tools/**"
       - "tests/**"
       - "scripts/**"
@@ -60,6 +64,11 @@ jobs:
 
     steps:
       - uses: actions/checkout@v7
+
+      - name: Set up Python for packaging
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
 
       - name: Install Goose (project-local, checksum verified)
         run: sh ./scripts/goose.sh --version
@@ -123,11 +132,25 @@ jobs:
           ./app/gooswan --ui-smoke
           ./app/gooswan --dialog-test
 
+      - name: Package desktop application
+        run: sh ./scripts/package_zip.sh "app/gooswan${{ matrix.exe }}" "${{ matrix.platform }}" "${{ matrix.arch }}"
+
+      - name: Verify relocated desktop package
+        if: runner.os != 'Linux'
+        run: python scripts/check_package.py "gooswan-${{ matrix.platform }}-${{ matrix.arch }}.zip" "${{ matrix.platform }}"
+
+      - name: Packaged GUI smoke test (Linux)
+        if: runner.os == 'Linux'
+        env:
+          GOOSE_GFX_HEADLESS: "1"
+          SDL_AUDIODRIVER: dummy
+        run: python scripts/check_package.py "gooswan-${{ matrix.platform }}-${{ matrix.arch }}.zip" linux --smoke
+
       - name: Upload artifact
         uses: actions/upload-artifact@v7
         with:
           name: gooswan-${{ matrix.platform }}-${{ matrix.arch }}
-          path: app/gooswan${{ matrix.exe }}
+          path: gooswan-${{ matrix.platform }}-${{ matrix.arch }}.zip
           if-no-files-found: error
 
   publish-release:
@@ -145,17 +168,12 @@ jobs:
         with:
           path: release-assets
 
-      - name: Package and upload release zips
+      - name: Upload verified desktop packages
         env:
           GH_TOKEN: ${{ github.token }}
           RELEASE_TAG: ${{ github.event.release.tag_name }}
         run: |
-          # Artifact names are gooswan-<platform>-<arch> (build job above).
-          for dir in release-assets/gooswan-*; do
-            rest="${dir##*/gooswan-}"
-            sh ./scripts/package_zip.sh "$dir"/gooswan* "${rest%-*}" "${rest##*-}"
-          done
-          shopt -s nullglob
-          zips=(gooswan-*.zip)
-          [ "${#zips[@]}" -gt 0 ] || { echo "Error: no zips were produced." >&2; exit 1; }
+          shopt -s nullglob globstar
+          zips=(release-assets/**/gooswan-*.zip)
+          [ "${#zips[@]}" -eq 4 ] || { echo "Error: expected four desktop packages." >&2; exit 1; }
           gh release upload "$RELEASE_TAG" "${zips[@]}" --clobber

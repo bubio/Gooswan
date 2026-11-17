@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=Gooswan
+Comment=WonderSwan / WonderSwan Color emulator
+Exec=gooswan
+Icon=gooswan
+Categories=Game;Emulator;
+Terminal=false

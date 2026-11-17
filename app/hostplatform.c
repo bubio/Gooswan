@@ -18,6 +18,12 @@ typedef struct { uint8_t *data; int64_t len; } hs_out;
 typedef struct SDL_Window SDL_Window;
 typedef struct SDL_Gamepad SDL_Gamepad;
 typedef struct SDL_Mutex SDL_Mutex;
+typedef struct SDL_IOStream SDL_IOStream;
+typedef struct SDL_Surface SDL_Surface;
+extern SDL_IOStream *SDL_IOFromFile(const char *, const char *);
+extern SDL_Surface *SDL_LoadBMP_IO(SDL_IOStream *, bool);
+extern bool SDL_SetWindowIcon(SDL_Window *, SDL_Surface *);
+extern void SDL_DestroySurface(SDL_Surface *);
 typedef struct { const char *name; const char *pattern; } SDL_DialogFileFilter;
 extern SDL_Window **SDL_GetWindows(int *);
 extern void SDL_free(void *);
@@ -78,6 +84,16 @@ void hostplatform_close(void) {
     window = NULL;
     /* A native dialog may still own its callback at exit. The mutex and
        result stay process-owned until then; never free callback storage early. */
+}
+void hostwindow_icon(hs_in path) {
+    if (!window) return;
+    char *name = hs_string(path);
+    if (!name) return;
+    SDL_IOStream *io = SDL_IOFromFile(name, "rb");
+    free(name);
+    if (!io) return;
+    SDL_Surface *surface = SDL_LoadBMP_IO(io, true);
+    if (surface) { SDL_SetWindowIcon(window, surface); SDL_DestroySurface(surface); }
 }
 bool hostwindow_focused(void) { return window && SDL_GetKeyboardFocus() == window; }
 bool hostwindow_restore_focus(void) {

@@ -27,7 +27,7 @@ Gooswan separates a platform-independent core (`core/`, a Goose package with no 
 
 ## Download
 
-Prebuilt binaries are attached to [**Releases**](https://github.com/bubio/Gooswan/releases/latest). Each zip holds the `gooswan` binary, this README third-party notices and the bundled GUI font.
+Prebuilt binaries are attached to [**Releases**](https://github.com/bubio/Gooswan/releases/latest). Each ZIP contains a desktop application, this README, third-party notices and the bundled GUI font. macOS archives contain `Gooswan.app`; Windows archives contain `Gooswan/Gooswan.exe` (no console window); Linux archives contain `Gooswan/gooswan`, an icon, desktop entry and a per-user installer.
 
 | Platform | Asset name |
 |----------|------------|
@@ -36,10 +36,12 @@ Prebuilt binaries are attached to [**Releases**](https://github.com/bubio/Gooswa
 | Linux (x64, glibc of Ubuntu 22.04 or newer) | `gooswan-linux-amd64.zip` |
 | Windows (x64) | `gooswan-windows-x86_64.zip` |
 
-> Note for macOS: the binary is not notarized, so Gatekeeper may block it on first launch. Remove the quarantine flag:
+> On macOS, drag `Gooswan.app` to Applications and open it. The app is ad-hoc signed, but is not notarized. If Gatekeeper blocks a trusted download, remove its quarantine flag:
 > ```bash
-> xattr -d com.apple.quarantine ./gooswan
+> xattr -dr com.apple.quarantine /Applications/Gooswan.app
 > ```
+
+On Windows, extract the entire ZIP and open `Gooswan/Gooswan.exe`. On Linux, run `Gooswan/gooswan` directly, or run `sh Gooswan/install.sh` to install it in your user account and add it to the application menu. Keep the bundled `assets/` beside the executable.
 
 ## Building
 
@@ -60,6 +62,21 @@ sh scripts/fetch_test_roms.sh    # builds WSHWTest / WSTimingTest into tests/rom
 sh scripts/fetch_corpus.sh       # SingleStepTests 8086 corpus into tests/data
 sh scripts/build.sh --test
 ```
+
+Build a native desktop distribution (Python 3 is required for packaging):
+
+```bash
+sh scripts/build.sh
+sh scripts/package_zip.sh app/gooswan macos arm64   # Intel Mac: x86_64
+# Linux: sh scripts/package_zip.sh app/gooswan linux amd64
+# Windows (Git Bash): sh scripts/package_zip.sh app/gooswan.exe windows x86_64
+python3 scripts/check_package.py gooswan-macos-arm64.zip macos
+open dist/Gooswan.app                             # local macOS app
+```
+
+Run packaging on the target OS. macOS packaging uses Xcode Command Line Tools (`vtool`, `codesign`, `ditto`) and leaves a launchable app in `dist/Gooswan.app`. `scripts/build.sh` targets macOS 13.5 by default (`MACOSX_DEPLOYMENT_TARGET` can override it), and packaging records the binary's actual minimum OS version. The application version is defined in `VERSION`. Icons live in `assets/icons/`; regenerate ICNS/ICO/PNG/BMP derivatives from `AppIcon.png` on macOS with `python3 scripts/generate_icons.py`.
+
+CI builds all four targets, packages them on their native runners, and verifies each ZIP after extracting outside the checkout. Linux additionally runs the packaged GUI smoke test with lavapipe. Workflow artifacts contain the complete ZIPs; release publishing uploads those same verified archives. Windows keeps a console-enabled development binary for CLI tests and sets the GUI subsystem only in the packaged copy.
 
 `scripts/lint.sh` fails on any `goose check` warning or a source not in `goose format` layout.
 

@@ -7,8 +7,9 @@ fn front_make_ui() -> ui::Context {
     let windows_latin = str(win, "/Fonts/segoeui.ttf");
     let packaged = str(resource_dir(), "assets/fonts/MPLUS1p-Regular.ttf");
     let checkout = str(resource_dir(), "../assets/fonts/MPLUS1p-Regular.ttf");
-    let candidates: const u8[:][9] = [
-        packaged, checkout,
+    let bundle = str(resource_dir(), "../Resources/assets/fonts/MPLUS1p-Regular.ttf");
+    let candidates: const u8[:][10] = [
+        bundle, packaged, checkout,
         "/System/Library/Fonts/Supplemental/Arial Unicode.ttf",
         "/System/Library/Fonts/Supplemental/Arial.ttf",
         "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc",
