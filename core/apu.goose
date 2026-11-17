@@ -2,8 +2,8 @@
 // mixer readback ports and the 24 kHz stereo sample stream.
 namespace core;
 
-var lfsr:      i64 = 0;     // APU noise LFSR (15-bit, XNOR feedback), read back through ports 92/93
-var noise_acc: i64 = 0;     // cycles accumulated towards the next LFSR step
+var lfsr:          i64 = 0; // APU noise LFSR (15-bit, XNOR feedback), read back through ports 92/93
+var noise_counter: i64 = 0; // ticks held before the next LFSR step (Swanium countdown)
 fn step_lfsr() {
     let mode: i64 = (io_ports[SND_NOISE] as i64) & 7;
     var tap: i64 = 14;
@@ -11,18 +11,25 @@ fn step_lfsr() {
     let fb: i64 = 1 ^ ((lfsr >> 7) & 1) ^ ((lfsr >> tap) & 1);
     lfsr = ((lfsr << 1) | fb) & 0x7FFF;
 }
+fn noise_reset() {
+    lfsr = 0;
+    noise_counter = 2048 - apu_pitch(3);
+}
 fn noise_tick(dc: i64) {
-    if ((io_ports[SND_NOISE] as i64) & 0x10) == 0 { return; }        // NOISE_ENABLE
-    // The LFSR steps with channel 4's period counter whenever the counter
-    // runs (0x90 bit 3), in wavetable mode too; noise mode (bit 7) only picks
-    // the audible output (WSdev wiki, Mesen). Clock Tower relies on this: its
-    // QUICK START shuffle polls port 92 with CH4 in wave mode and never ends
-    // otherwise. ws-test-suite sound/quirks row 5 offset 2 disagrees.
-    if ((io_ports[SND_CTRL] as i64) & 0x08) == 0 { return; }        // CH4_ENABLE
-    let pitch:  i64 = io_ports[SND_CH_PITCH + 6] | (((io_ports[SND_CH_PITCH + 7] as i64) & 7) << 8);
-    let period: i64 = 2048 - pitch;
-    noise_acc += dc;
-    while noise_acc >= period { noise_acc -= period; step_lfsr(); }
+    if ((io_ports[SND_NOISE] as i64) & 0x10) == 0 { return; }
+    // Match Swanium: the gate clocks the LFSR even without channel 4 output.
+    // A zero counter steps now; a reload holds for 2048 - pitch further ticks.
+    var remaining = dc;
+    while remaining > 0 {
+        if remaining <= noise_counter { noise_counter -= remaining; return; }
+        remaining -= noise_counter + 1;
+        noise_counter = 2048 - apu_pitch(3);
+        if ((io_ports[SND_NOISE] as i64) & 8) != 0 {
+            lfsr = 0;
+            io_ports[SND_NOISE] = ((io_ports[SND_NOISE] as i64) & 0xF7) as! u8;
+        }
+        step_lfsr();
+    }
 }
 
 var ch_period:   i64[4] = [0; 4];
@@ -90,13 +97,27 @@ fn sweep_advance(dc: i64) {
 fn apu_tick(dc: i64) {
     if dc <= 0 { return; }
     let ctrl: i64 = io_ports[SND_CTRL];
-    for ch in 4 { if (ctrl & (1 << ch)) != 0 { apu_chan_advance(ch, dc); } }
-    var sdc: i64 = dc - sweep_prepaid;
+    if (ctrl & 0x20) == 0 { voice_lp_prev = 0; voice_level = 0; }
+    var prepaid = sweep_prepaid;
     sweep_prepaid = 0;
-    if sdc > 0 { sweep_advance(sdc); }
-    if aud_enabled {
-        aud_acc += dc;
-        while aud_acc >= 128 { aud_acc -= 128; audio_emit(); }
+    var remaining = dc;
+    while remaining > 0 {
+        // Wave-only operation can advance in bulk, but never past the next
+        // output sample. Feature clocks must retain their per-cycle ordering:
+        // DMA latch, sweep/noise, oscillators, then output (as in Swanium).
+        let features = (ctrl & 0x44) == 0x44 || ((io_ports[SND_NOISE] as i64) & 0x10) != 0 || (!model_mono && ((io_ports[SDMA_CTRL] as i64) & 0x80) != 0);
+        let chunk = if features { 1 } else if aud_enabled { min(remaining, 128 - aud_acc) } else { remaining };
+        sdma_tick(chunk);
+        noise_tick(chunk);
+        let paid = min(prepaid, chunk);
+        prepaid -= paid;
+        if chunk > paid { sweep_advance(chunk - paid); }
+        for ch in 4 { if (ctrl & (1 << ch)) != 0 { apu_chan_advance(ch, chunk); } }
+        if aud_enabled {
+            aud_acc += chunk;
+            if aud_acc >= 128 { aud_acc -= 128; audio_emit(); }
+        }
+        remaining -= chunk;
     }
 }
 

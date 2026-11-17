@@ -28,3 +28,5 @@ tools/swprobe/target/
 __pycache__/
 /app/gooswan.exe
 /tools/sst.exe
+/tools/audio_test
+/tools/audio_test.exe

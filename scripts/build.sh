@@ -14,5 +14,6 @@ fi
 sh ./scripts/check_core.sh
 sh ./scripts/lint.sh
 sh ./scripts/goose.sh build tools/sst.goose
+sh ./scripts/goose.sh build tools/audio_test.goose
 sh ./scripts/goose.sh build app/gooswan.goose
 if [ "$1" = "--test" ]; then sh ./scripts/run_tests.sh; fi

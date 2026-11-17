@@ -56,6 +56,7 @@ CI builds all four targets, packages them on their native runners, and verifies 
 ./tools/sst ws <rom> [suite] [fb|wav|fbwav]  # headless ROM runner (framebuffer / audio dump)
 ./tools/sst cpu_test                    # also: ppu_test, apu_test, eeprom_test, state_test
 ./app/gooswan --self-test                # TOML/settings/input behavior
+./tools/audio_test                      # native-rate adapter and stateful linear interpolation, no device needed
 GOOSWAN_CONFIG_DIR="$PWD/.goose/ui-smoke" ./app/gooswan --ui-smoke
 ./app/gooswan --dialog-test              # offscreen modal-cancellation regression
 GOOSWAN_CONFIG_DIR="$PWD/.goose/cancel-test" ./app/gooswan --cancel-test # click Cancel in the native picker

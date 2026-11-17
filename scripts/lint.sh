@@ -6,7 +6,7 @@ set -e
 cd "$(dirname "$0")/.."
 status=0
 warn_all=""
-for entry in core/core.goose app/gooswan.goose tools/sst.goose; do
+for entry in core/core.goose app/gooswan.goose tools/sst.goose tools/audio_test.goose; do
     out=$(sh ./scripts/goose.sh check "$entry" 2>&1) || { echo "$out" >&2; exit 1; }
     warn_all="$warn_all$(printf '%s\n' "$out" | grep ': warning:' | sed "s|^$PWD/||" || true)
 "

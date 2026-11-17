@@ -157,7 +157,7 @@ fn port_wr(p: i64, v: i64) {
     else if p == HBLANK_TIMER_RELOAD + 1 { io_ports[HBLANK_TIMER_COUNTER + 1] = v as! u8; }
     else if p == VBLANK_TIMER_RELOAD { io_ports[VBLANK_TIMER_COUNTER] = v as! u8; }
     else if p == VBLANK_TIMER_RELOAD + 1 { io_ports[VBLANK_TIMER_COUNTER + 1] = v as! u8; }
-    if p == SND_NOISE && (v & 0x08) != 0 { lfsr = 0; noise_acc = 0; io_ports[SND_NOISE] = (v & 0xF7) as! u8; }  // noise reset: reseed LFSR, bit self-clears
+    if p == SND_NOISE && (v & 0x08) != 0 { noise_reset(); io_ports[SND_NOISE] = (v & 0x17) as! u8; }  // noise reset: reseed LFSR, bit self-clears
     if p == SND_SWEEP_VALUE || p == SND_SWEEP_TIME { sweep_ctr = 0; sweep_step = 0; }  // sweep register writes reset the sweep timer
     if p == SND_VOICE_SAMPLE { voice_feed(v); }  // voice data latch: feeds the reconstruction low-pass while voice mode is on
     if !model_mono && p >= HV_DIRECT_L_LO && p <= HV_DIRECT_R_HI { io_ports[HV_DATA] = 0; }  // HyperVoice direct write clears the data latch (colour only)
@@ -326,9 +326,7 @@ fn sdma_tick(dc: i64) {
 // of the line that just completed.
 fn ws_line_events() {
     let apu_dc: i64 = ws_cycles - last_tick;
-    noise_tick(apu_dc);
     apu_tick(apu_dc);
-    sdma_tick(apu_dc);
     last_tick = ws_cycles;
     let line: i64 = (ws_cycles % 40704) / 256;
     while last_line != line {
@@ -396,7 +394,7 @@ fn ws_boot() {
     rom_span = 1; while rom_span < rom.len { rom_span *= 2; }
     int_cause = 0; key_select = 0; keys_state = 0; cpu_halted = false; sys_ctrl1 = 0x02;
     irq_inhibit = 0; trap_inhibit = 0; irq_ret_override = -1;
-    ws_cycles = 0; last_line = 0; lfsr = 0; noise_acc = 0; last_tick = 0; init_cyc(); init_io_masks();
+    ws_cycles = 0; last_line = 0; lfsr = 0; noise_counter = 0; last_tick = 0; init_cyc(); init_io_masks();
     for i in 8 { r[i] = 0; }
     for i in 4 { seg[i] = 0; }
     seg[1] = 0xFFFF; ip = 0; flags = 0;

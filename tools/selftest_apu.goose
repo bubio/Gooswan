@@ -15,11 +15,31 @@ fn apu_reset_state() {
     sweep_ctr = 0; sweep_step = 0; fast_primed = false;
     sdma_running = false; sdma_clock = 0;
     aud_acc = 0; voice_lp_prev = 0; voice_level = 0; aud_buf = [];
-    lfsr = 0; noise_acc = 0; int_cause = 0; ws_cycles = 0;
+    lfsr = 0; noise_counter = 0; int_cause = 0; ws_cycles = 0;
     init_io_masks();
 }
 
 fn apu_test() {
+    // Swanium noise clock: immediate first step, then a full countdown;
+    // channel enable controls audibility, not the random-port clock.
+    apu_reset_state();
+    io_ports[0x8E] = 0x10;
+    io_ports[0x86] = 0xFE; io_ports[0x87] = 7; // reload 2, step every 3 ticks
+    apu_tick(1);
+    apu_check("noise clocks with channel disabled", lfsr, 1);
+    apu_tick(2);
+    apu_check("noise holds for full reload", lfsr, 1);
+    apu_tick(1);
+    apu_check("noise advances after countdown", lfsr, 3);
+    io_ports[0x8E] = 0; apu_tick(10);
+    apu_check("closed noise gate holds countdown", noise_counter, 2);
+    port_wr(0x8E, 0x18);
+    apu_check("noise reset clears readback immediately", port_rd(0x92), 0);
+    apu_check("noise reset clears request bit", io_ports[0x8E], 0x10);
+    apu_tick(2);
+    apu_check("noise reset reload holds", lfsr, 0);
+    apu_tick(1);
+    apu_check("noise reset resumes after reload", lfsr, 1);
     // Channel advance, period 1 pitch (0x7FF): one sample per tick
     apu_reset_state();
     mem[0] = 0x10; mem[1] = 0x32; mem[2] = 0x54;
@@ -251,6 +271,42 @@ fn apu_test() {
     apu_check("aud cadence holds remainder", aud_buf.len, 6);
     apu_tick(123);
     apu_check("aud cadence completes sample", aud_buf.len, 8);
+    // Sampling must occur at each 128-cycle boundary, even when a tick
+    // spans several samples or ends just beyond a boundary.
+    apu_reset_state();
+    aud_enabled = true;
+    for i in 16 { mem[i] = ((((i * 2 + 1) & 15) << 4) | ((i * 2) & 15)) as! u8; }
+    io_ports[0x80] = 0xFD; io_ports[0x81] = 7; // period 3
+    io_ports[0x88] = 0x10; io_ports[0x90] = 1; io_ports[0x91] = 0x80;
+    apu_tick(384);
+    apu_check("bulk sample at cycle 128", aud_buf[0], 11 * 32);
+    apu_check("bulk sample at cycle 256", aud_buf[2], 6 * 32);
+    apu_check("bulk sample at cycle 384", aud_buf[4], 0);
+    let bulk_pcm = to_bytes(aud_buf[..]);
+    aud_buf = []; aud_acc = 0; ch_period[0] = 0; ch_idx[0] = 0; ch_sample[0] = 0;
+    for i in 384 { apu_tick(1); }
+    apu_check("bulk and single-cycle audio agree", if to_bytes(aud_buf[..]) == bulk_pcm { 1 } else { 0 }, 1);
+    aud_buf = []; aud_acc = 0; ch_period[0] = 0; ch_idx[0] = 0; ch_sample[0] = 0;
+    apu_tick(127); apu_tick(4);
+    apu_check("instruction crossing sample boundary", aud_buf[0], 11 * 32);
+
+    // DMA feeds the voice latch before the APU samples that same cycle.
+    apu_reset_state();
+    model_mono = false;
+    mem[0x2000] = 0xFF; mem[0x2001] = 0;
+    io_ports[0x90] = 0x20; io_ports[0x91] = 0x80; io_ports[0x94] = 5;
+    io_ports[0x4A] = 0; io_ports[0x4B] = 0x20; io_ports[0x4E] = 2;
+    io_ports[0x52] = 0x83;
+    apu_tick(256);
+    apu_check("DMA voice available at first sample", aud_buf[0], 63 * 64);
+    apu_check("DMA voice updated at second sample", aud_buf[2], 0);
+    apu_check("DMA voice drains source", io_ports[0x4A], 2);
+
+    // A brief wave-mode interval must clear the PCM reconstruction history.
+    voice_feed(0xFF);
+    io_ports[0x90] = 0; apu_tick(1);
+    io_ports[0x90] = 0x20; voice_feed(0x80);
+    apu_check("voice restart clears filter history", voice_level, 0);
     aud_enabled = false;
     // Voice channel: write-fed low-pass, port 0x94 routing, x64 scale
     apu_reset_state();

@@ -3,7 +3,7 @@
 // its fields change. Audio already handed to the host is never restored.
 namespace core;
 
-let STATE_VERSION: u64 = 1;
+let STATE_VERSION: u64 = 2; // noise countdown replaces the version-1 elapsed clock
 let STATE_MAGIC:   u64 = 0x3154534E41575347;
 struct MachineState {
     mem:                  u8[1048576],
@@ -94,7 +94,7 @@ struct MachineState {
     ie_delay:             i64,
     ie_fault:             bool,
     lfsr:                 i64,
-    noise_acc:            i64,
+    noise_counter:        i64,
     ch_period:            i64[4],
     ch_idx:               i64[4],
     ch_sample:            i64[4],
@@ -207,7 +207,7 @@ fn save_state_bytes() -> u8[>..] {
     snap[0].ie_delay = ie_delay;
     snap[0].ie_fault = ie_fault;
     snap[0].lfsr = lfsr;
-    snap[0].noise_acc = noise_acc;
+    snap[0].noise_counter = noise_counter;
     snap[0].ch_period = ch_period;
     snap[0].ch_idx = ch_idx;
     snap[0].ch_sample = ch_sample;
@@ -336,7 +336,7 @@ fn load_state_bytes(data: const u8[:]) -> bool {
     ie_delay = snap[0].ie_delay;
     ie_fault = snap[0].ie_fault;
     lfsr = snap[0].lfsr;
-    noise_acc = snap[0].noise_acc;
+    noise_counter = snap[0].noise_counter;
     ch_period = snap[0].ch_period;
     ch_idx = snap[0].ch_idx;
     ch_sample = snap[0].ch_sample;

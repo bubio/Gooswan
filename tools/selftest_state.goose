@@ -14,6 +14,7 @@ fn state_test() {
     set_audio(true);
     io_ports[SND_CTRL] = 1; io_ports[SND_OUTPUT_CTRL] = 0x0F;
     io_ports[SND_CH_VOL] = 0xFF;
+    io_ports[SND_NOISE] = 0x10; // continuation includes the active noise countdown
     for i in 16 { mem[i] = (i * 13) as! u8; }
     state_check("initial execution", run_frame(0)); audio_clear();
     let saved = save_state_bytes();
@@ -27,8 +28,10 @@ fn state_test() {
     state_check("truncation rejected", !load_state_bytes(saved[..saved.len - 1]));
     var bad = str(saved); bad[50] ^= 1;
     state_check("corruption rejected", !load_state_bytes(bad));
-    bad = str(saved); bad[9] = 2;
+    bad = str(saved); bad[9] ^= 0x80;
     state_check("unsupported version rejected", !load_state_bytes(bad));
+    bad = str(saved); bad[9] = 1;
+    state_check("old noise-clock state version rejected", !load_state_bytes(bad));
     state_check("failed loads do not mutate", save_state_bytes() == unchanged);
     image[20] = 1; power_on(image[..]);
     let other = save_state_bytes();
