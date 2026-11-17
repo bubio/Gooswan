@@ -21,7 +21,7 @@ if [ "$format" = appimage ]; then
     if command -v apt-get >/dev/null; then
         apt-get install -y libx11-6 libxcursor1 libxi6 libxrandr2 libxkbcommon0 libwayland-client0 libasound2 libpulse0 libvulkan1
     else
-        dnf install -y libX11 libXcursor libXi libXrandr libxkbcommon wayland-libs-client alsa-lib pulseaudio-libs vulkan-loader
+        dnf install -y libX11 libXcursor libXi libXrandr libxkbcommon libwayland-client alsa-lib pulseaudio-libs vulkan-loader
     fi
     python3 scripts/check_package.py "${archives[0]}" linux --arch x86_64 --smoke
 else
