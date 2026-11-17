@@ -74,3 +74,21 @@ two distinct heads/necks and used subtle occlusion shading to separate the
 bodies. Updated all icon formats and regenerated the local macOS app and ZIP.
 Signature verification and 51 relocated frontend self-tests passed. The final
 edit prompt is in the icon README.
+
+### Approved charcoal / white / cyan icon
+
+After preview-only design iterations, the user approved a charcoal tile with a
+large white left-facing Swanium swan and the cyan Goose language logo layered
+across its center. The final background-extraction edit used the built-in image
+tool, followed by alpha export normalization to remove low-alpha exterior noise
+and make the interior opaque. The normalization helper preserves intermediate
+antialiased edge values and rejects opaque exterior corners.
+
+Updated the master and all PNG/ICNS/ICO/BMP derivatives. ICO metadata now records
+32-bit RGBA; SDL BMP output has an explicit alpha bitmask. All seven ICNS PNG
+representations, all six ICO PNG representations, master/desktop PNGs and the
+BMP have transparent corner alpha=0 and opaque center alpha=1. The local macOS
+app and ZIP were regenerated, with the bundled ICNS verified byte-for-byte.
+Signature verification and 51 relocated frontend self-tests passed. Windows and
+Linux packaging use the new assets on their respective native builds; no new
+Windows/Linux binaries or remote CI run were produced during this icon update.

@@ -1,25 +1,26 @@
 # Gooswan application icon
 
-`AppIcon.png` is the current master artwork, edited with the built-in image generation tool. It depicts **two distinct birds with overlapping bodies/wings**: the Goose language goose at the left/front and the Swanium swan at the right/back. Their heads face outward and their feathers overlap at the center.
+`AppIcon.png` is the approved 1024 × 1024 master: a charcoal tile, white Swanium swan, and large cyan Goose language logo superimposed across the center. Both birds face left. The swan's upward-curving feathers remain white; the goose's thin horizontal feathers are cyan.
 
-References:
+The design was created with the built-in image generation tool using Swanium's icon and the [Goose language logo](https://aardappel.github.io/goose/docs/logo/logo_black_fg_white_bg_mini.png) as references. The palette uses the black/white and bright cyan from the user-supplied WonderSwan Color logo reference. The reference repositories were not modified.
 
-- Swanium: `/Users/bubio/dev/_Emu/Swanium/assets/icons/AppIcon.png` — swan silhouette, blue beveled tile and luminous cyan material.
-- [Goose language logo](https://aardappel.github.io/goose/docs/logo/logo_black_fg_white_bg_mini.png) — goose silhouette with round eye, triangular bill and horizontal feather streaks.
+## Approved design prompt
 
-The reference repositories were not modified. The master uses clean opaque white corners around the rounded tile.
+Create a refined alternative color/material design for the overlapping two-bird composition. Preserve the exact silhouettes: large left-facing Swanium swan behind, large left-facing Goose language logo superimposed across the lower center. Use near-black charcoal (#20252B) for the rounded tile, porcelain white (#F3F4F2) for the complete swan including all upward-curved feathers, and vivid cyan (#00A5DF) for the complete goose including its horizontal feather streaks. Keep dark eyes, mostly flat color, very subtle depth and a delicate overlap shadow. Avoid inflated glossy plastic shading. No lettering or extra objects. Use transparent alpha outside the tile.
 
-## Final edit prompt
+## Final transparency edit prompt
 
-Use case: compositing / precise-object-edit.
-Edit the supplied Gooswan application icon. Preserve its blue beveled rounded-square tile, luminous pale cyan material, clean white exterior corners, and refined Swanium-inspired style.
-USER'S REQUEST: move the GOOSE to the LEFT, the SWAN to the RIGHT, and make their bodies/wings OVERLAP gracefully in the center, with excellent overall balance.
-There must still be exactly TWO recognizable birds with two separate heads and necks.
-LEFT bird: the Goose programming language goose, facing LEFT, with a round eye, short triangular bill, relatively straight rising neck, compact body and straight horizontal pointed feather streaks extending RIGHT into the center.
-RIGHT bird: the Swanium swan, facing RIGHT, with almond-shaped eye, elegant downturned bill, dramatically arched S-shaped neck and rounded sweeping body, with upward-curved feather tips extending LEFT into the center.
-Composition: their heads sit toward the upper left and upper right respectively, looking outward. Their bodies sit closer together in the lower center. Substantially overlap the wing/body area (about one-third of their bodies) to form a cohesive intertwined double-bird emblem instead of two isolated side-by-side marks. Put the goose's crisp horizontal feather layers in front of the swan's curved body at the central crossing. Use subtle tonal shading and a narrow darker-cyan occlusion edge at overlaps so BOTH bodies remain readable; do not fuse their anatomy into one shared torso. Keep only two necks, two heads. Aim for a graceful compact flowing composition with similar visual weight for each bird, centered within the tile, even generous margins and no awkward tangencies. The swan can stand slightly taller to accommodate its curved neck.
-Do not simply mirror the existing pair: redesign the central overlapping bodies as described. No text, no additional objects, no extra birds. Output square 1024x1024, opaque white outside the tile.
+Use case: background-extraction. Edit the supplied APPROVED Gooswan icon. Preserve every pixel of the design inside the rounded-square charcoal tile: white Swanium swan in back, cyan Goose logo in front, exact placement and shapes. Clean ONLY the alpha matte OUTSIDE the tile. All exterior pixels must be fully transparent alpha=0, including the stray gray/blue colored flecks along the top and bottom edges and any detached pixels near corners. Remove the exterior speckles entirely. Preserve a smooth clean antialiased tile boundary without halo. Do not redraw, recolor, move, resize, sharpen or otherwise change the two birds or charcoal tile. Output a genuine transparent PNG, square, with no matte color or checkerboard baked into corners. This is production cutout cleanup, not a new design.
 
-## Derived files
+## Alpha export and derived formats
 
-The selected output was normalized to 1024 × 1024. Run `python3 scripts/generate_icons.py` on macOS to regenerate `Gooswan.icns`, the six-size `Gooswan.ico`, `gooswan.png` (256 pixels) and the SDL window icon `gooswan.bmp`. This uses only Python's standard library and macOS `sips`.
+The generated matte contained near-transparent exterior noise. `scripts/normalize_icon_alpha.swift` finalizes alpha for icon export: values at or below 16/255 become transparent and values at or above 239/255 become opaque, preserving intermediate antialiased edge values. It does not redesign or recolor the artwork. The final master was normalized before resizing to 1024 pixels.
+
+Run `python3 scripts/generate_icons.py` on macOS with Xcode Command Line Tools (Swift/AppKit and sips). It requires an alpha-capable master, normalizes the export matte, and produces:
+
+- `Gooswan.icns`: 16–1024 pixel PNG representations for macOS.
+- `Gooswan.ico`: six RGBA PNG representations (16, 32, 48, 64, 128, 256 pixels), advertised as 32-bit for Windows.
+- `gooswan.png`: 256-pixel Linux/README icon.
+- `gooswan.bmp`: 32-bit BMP with alpha masks, used for SDL window icons.
+
+The macOS bundle uses the ICNS; Windows packaging embeds the ICO; Windows/Linux SDL windows use the BMP; the Linux desktop installer copies the PNG. Native packaging picks up these files on each platform.
