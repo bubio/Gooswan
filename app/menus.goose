@@ -4,6 +4,12 @@
 fn front_window_flags(flags: i64) -> i64 {
     return flags | (if front_ui_recover_input { ui::WINDOW_NO_INPUT } else { 0 });
 }
+// The frame that closes a menu still belongs to that menu: do not forward
+// its click/release to a window behind it.
+var front_menu_blocks_input: bool = false;
+fn front_content_window_flags(flags: i64) -> i64 {
+    return front_window_flags(flags | (if front_menu_blocks_input { ui::WINDOW_NO_INPUT } else { 0 }));
+}
 // Compact menus and sectioned dialogs, following UsaProject's Nuklear patterns.
 var front_settings_reopen: bool = false;
 var front_about_reopen:    bool = false;
@@ -125,6 +131,7 @@ fn front_open_recent() {
 fn front_draw_ui() {
     let c = front_ui;
     let recovering_input = front_ui_recover_input;
+    front_menu_blocks_input = front_menu_open;
     front_menu_open = false;
     let screen = gfx::screen_size(); let density = max(hostwindow_scale(), 1.0);
     let ww = screen.x / density; let hh = screen.y / density;
@@ -178,6 +185,7 @@ fn front_draw_ui() {
         ui::menubar_end(c);
     }
     ui::end(c);
+    front_menu_blocks_input = front_menu_blocks_input || front_menu_open;
     front_draw_status(ww, hh);
     ui::set_style(c, saved);
     if !front_loaded && !front_settings && !front_about && !front_recent { front_draw_welcome(ww, hh); }
@@ -217,7 +225,7 @@ fn front_status_divider() {
 fn front_volume_icon() {
     let c = front_ui; let state, r = ui::widget(c);
     if state == 0 { return; }
-    if !front_settings && !front_about && !front_recent && ui::input_is_mouse_pressed(c, ui::BUTTON_LEFT) && ui::input_is_mouse_hovering_rect(c, r) {
+    if !front_menu_blocks_input && !front_settings && !front_about && !front_recent && ui::input_is_mouse_pressed(c, ui::BUTTON_LEFT) && ui::input_is_mouse_hovering_rect(c, r) {
         if settings.volume > 0 { front_pre_mute = settings.volume; settings.volume = 0; }
         else { settings.volume = max(front_pre_mute, 1); }
         front_set_volume();
@@ -234,8 +242,8 @@ var front_volume_drag: bool = false;
 fn front_volume_slider() {
     let c = front_ui; let state, r = ui::widget(c);
     if state == 0 { return; }
-    if ui::input_is_mouse_pressed(c, ui::BUTTON_LEFT) && ui::input_is_mouse_hovering_rect(c, r) && !front_settings && !front_about && !front_recent { front_volume_drag = true; }
-    if !ui::input_is_mouse_down(c, ui::BUTTON_LEFT) && front_volume_drag { front_volume_drag = false; settings_save(); }
+    if ui::input_is_mouse_pressed(c, ui::BUTTON_LEFT) && ui::input_is_mouse_hovering_rect(c, r) && !front_menu_blocks_input && !front_settings && !front_about && !front_recent { front_volume_drag = true; }
+    if (!ui::input_is_mouse_down(c, ui::BUTTON_LEFT) || front_menu_blocks_input) && front_volume_drag { front_volume_drag = false; settings_save(); }
     let left = r.x + 5.0; let width = max(r.w - 10.0, 1.0); let cy = r.y + r.h / 2.0;
     if front_volume_drag {
         let mouse = gfx::mouse_pos(); let density = max(hostwindow_scale(), 1.0);
@@ -252,7 +260,7 @@ fn front_draw_welcome(ww: f32, hh: f32) {
     let saved = ui::style(c); var clear = saved;
     clear.window.fixed_background = ui::style_item_color(ui::Color { 19, 21, 25, 255 });
     ui::set_style(c, clear);
-    if ui::begin(c, "Welcome", ui::rect((ww - w) / 2.0, FRONT_MENU_HEIGHT + (hh - front_chrome_height() - h) / 2.0, w, h), front_window_flags(ui::WINDOW_NO_SCROLLBAR | ui::WINDOW_BACKGROUND)) {
+    if ui::begin(c, "Welcome", ui::rect((ww - w) / 2.0, FRONT_MENU_HEIGHT + (hh - front_chrome_height() - h) / 2.0, w, h), front_content_window_flags(ui::WINDOW_NO_SCROLLBAR | ui::WINDOW_BACKGROUND)) {
         ui::layout_row_dynamic(c, 28.0, 1); ui::label(c, "Gooswan", ui::TEXT_CENTERED);
         ui::layout_row_dynamic(c, 22.0, 1); ui::label_colored(c, "WonderSwan / WonderSwan Color", ui::TEXT_CENTERED, UI_MUTED);
         front_gap(8.0); ui::layout_row_dynamic(c, 28.0, 1);
@@ -264,7 +272,7 @@ fn front_draw_settings(ww: f32, hh: f32) {
     let c = front_ui; let w = min(552.0, ww - 16.0); let h = min(414.0, hh - 64.0);
     front_prepare_dialog("Settings", ui::rect((ww - w) / 2.0, FRONT_MENU_HEIGHT + (hh - front_chrome_height() - h) / 2.0, w, h), front_settings_reopen);
     front_settings_reopen = false;
-    if ui::begin(c, "Settings", ui::rect((ww - w) / 2.0, 34.0, w, h), front_window_flags(ui::WINDOW_BORDER | ui::WINDOW_TITLE | ui::WINDOW_MOVABLE | ui::WINDOW_CLOSABLE | ui::WINDOW_NO_SCROLLBAR)) {
+    if ui::begin(c, "Settings", ui::rect((ww - w) / 2.0, 34.0, w, h), front_content_window_flags(ui::WINDOW_BORDER | ui::WINDOW_TITLE | ui::WINDOW_MOVABLE | ui::WINDOW_CLOSABLE | ui::WINDOW_NO_SCROLLBAR)) {
         ui::layout_row_static(c, 26.0, 98, 2);
         if front_tab("ROM", front_section == 0) { front_section = 0; front_capture = -1; }
         if front_tab("Input", front_section == 1) { front_section = 1; }
@@ -336,7 +344,7 @@ fn front_input_settings() {
 fn front_draw_recent(ww: f32, hh: f32) {
     let c = front_ui; let w = min(476.0, ww - 16.0); let h = min(354.0, hh - 64.0);
     front_prepare_dialog("Recent ROMs", ui::rect((ww - w) / 2.0, (hh - h) / 2.0, w, h), front_recent_reopen); front_recent_reopen = false;
-    if ui::begin(c, "Recent ROMs", ui::rect((ww - w) / 2.0, (hh - h) / 2.0, w, h), front_window_flags(ui::WINDOW_BORDER | ui::WINDOW_TITLE | ui::WINDOW_MOVABLE | ui::WINDOW_CLOSABLE | ui::WINDOW_NO_SCROLLBAR)) {
+    if ui::begin(c, "Recent ROMs", ui::rect((ww - w) / 2.0, (hh - h) / 2.0, w, h), front_content_window_flags(ui::WINDOW_BORDER | ui::WINDOW_TITLE | ui::WINDOW_MOVABLE | ui::WINDOW_CLOSABLE | ui::WINDOW_NO_SCROLLBAR)) {
         ui::layout_row_dynamic(c, max(h - 82.0, 40.0), 1);
         if ui::group_begin(c, "RecentList", 0) {
             ui::layout_row_dynamic(c, 26.0, 1);
@@ -354,7 +362,7 @@ fn front_draw_recent(ww: f32, hh: f32) {
 fn front_draw_about(ww: f32, hh: f32) {
     let c = front_ui; let w = min(374.0, ww - 16.0); let h = min(248.0, hh - 64.0);
     front_prepare_dialog("About Gooswan", ui::rect((ww - w) / 2.0, (hh - h) / 2.0, w, h), front_about_reopen); front_about_reopen = false;
-    if ui::begin(c, "About Gooswan", ui::rect((ww - w) / 2.0, (hh - h) / 2.0, w, h), front_window_flags(ui::WINDOW_BORDER | ui::WINDOW_TITLE | ui::WINDOW_MOVABLE | ui::WINDOW_CLOSABLE | ui::WINDOW_NO_SCROLLBAR)) {
+    if ui::begin(c, "About Gooswan", ui::rect((ww - w) / 2.0, (hh - h) / 2.0, w, h), front_content_window_flags(ui::WINDOW_BORDER | ui::WINDOW_TITLE | ui::WINDOW_MOVABLE | ui::WINDOW_CLOSABLE | ui::WINDOW_NO_SCROLLBAR)) {
         ui::layout_row_dynamic(c, 28.0, 1); ui::label(c, "Gooswan", ui::TEXT_CENTERED);
         ui::layout_row_dynamic(c, 22.0, 1); ui::label(c, "WonderSwan / WonderSwan Color", ui::TEXT_CENTERED);
         ui::label_colored(c, "Goose / SDL3 / Nuklear", ui::TEXT_CENTERED, UI_MUTED);
