@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -72,7 +73,7 @@ func TestRoomHandshakeAndCableBytes(t *testing.T) {
 	events, output := io.Pipe()
 	finished := make(chan error, 1)
 	go func() {
-		finished <- join(ctx, input, output, "ws"+strings.TrimPrefix(server.URL, "http")+"/room/K7M2QD", "fixture")
+		finished <- join(ctx, input, output, "ws"+strings.TrimPrefix(server.URL, "http")+"/room/K7M2QD", "fixture", roomSeatTimeout)
 	}()
 	defer input.Close()
 	defer commands.Close()
@@ -111,6 +112,34 @@ func TestRoomHandshakeAndCableBytes(t *testing.T) {
 		}
 	case <-ctx.Done():
 		t.Fatal(ctx.Err())
+	}
+}
+
+func TestRoomSeatTimeout(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		ws, err := websocket.Accept(w, r, nil)
+		if err != nil {
+			return
+		}
+		defer ws.CloseNow()
+		if _, _, err := ws.Read(ctx); err != nil {
+			return
+		}
+		// An upgrade and an unrelated message do not constitute a seat.
+		_ = ws.Write(ctx, websocket.MessageText, []byte(`{"pong":1}`))
+		_, _, _ = ws.Read(ctx)
+	}))
+	defer server.Close()
+	in, commands := io.Pipe()
+	defer in.Close()
+	defer commands.Close()
+	var out bytes.Buffer
+	url := "ws" + strings.TrimPrefix(server.URL, "http") + "/room/K7M2QD"
+	err := join(ctx, in, &out, url, "fixture", 100*time.Millisecond)
+	if !errors.Is(err, errSeatTimeout) || out.Len() != 0 {
+		t.Fatalf("silent room = %v, desktop output %q", err, out.Bytes())
 	}
 }
 

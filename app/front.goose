@@ -1,6 +1,6 @@
 // Desktop event loop and emulation pacing.
 extern fn hostaudio_open(rate: i64) -> bool;
-extern fn hostaudio_push(pcm: const i16[:]);
+extern fn hostaudio_push(pcm: const i16[:], target: i64);
 extern fn hostaudio_queued() -> i64;
 extern fn hostaudio_clear();
 extern fn hostaudio_volume(value: i64);
@@ -29,6 +29,7 @@ fn front_resync() {
 }
 
 fn front_toggle_pause() {
+    if link_in_room() { front_notify("Leave the room before pausing"); return; }
     front_paused = !front_paused;
     front_resync();
 }
@@ -38,7 +39,8 @@ fn front_audio_pump() {
     if !front_audio_ok { core::audio_clear(); return; }
     var pcm: i16[>..] = [];
     for i in core::audio_len() { pcm.push(core::audio_sample(i) as! i16); }
-    core::audio_clear(); hostaudio_push(pcm[..]);
+    core::audio_clear();
+    hostaudio_push(pcm[..], if link_active() { FRONT_AUDIO_AHEAD } else { 0 });
 }
 
 fn front_run_frames(max_frames: i64) -> i64 {
@@ -63,6 +65,7 @@ fn front_run_frames(max_frames: i64) -> i64 {
         }
         if !core::run_frame(keys) {
             front_fault = true;
+            if link_in_room() { link_end("Left Swan Revival because emulation stopped"); }
             front_notify(str("Unsupported opcode ", core::fault_op(), " at ", core::fault_cs(), ":", core::fault_ip()));
             if front_check { front_running = false; }
             break;

@@ -150,7 +150,7 @@ fn front_draw_ui() {
     ui::window_set_bounds(c, "Menu", ui::rect(0.0, 0.0, ww, FRONT_MENU_HEIGHT));
     if ui::begin(c, "Menu", ui::rect(0.0, 0.0, ww, FRONT_MENU_HEIGHT), front_window_flags(ui::WINDOW_NO_SCROLLBAR)) {
         let file_items: FrontMenuItem[10] = [
-            FrontMenuItem { "Open ROM...", "Ctrl+O", FrontAction.PickRom, !front_dialog },
+            FrontMenuItem { "Open ROM...", "Ctrl+O", FrontAction.PickRom, !front_dialog && !link_in_room() },
             FrontMenuItem { "Open Recent...", "", FrontAction.OpenRecent, settings.recent_count > 0 },
             FrontMenuItem { "", "", FrontAction.None, false },
             FrontMenuItem { "Save State", "Ctrl+S", FrontAction.SaveState, front_path.len > 0 && !link_active() },
@@ -162,7 +162,7 @@ fn front_draw_ui() {
             FrontMenuItem { "Quit", "Ctrl+Q", FrontAction.Quit, true },
         ];
         let emu_items: FrontMenuItem[5] = [
-            FrontMenuItem { if front_paused { "Resume" } else { "Pause" }, "Ctrl+P", FrontAction.TogglePause, front_loaded },
+            FrontMenuItem { if front_paused { "Resume" } else { "Pause" }, "Ctrl+P", FrontAction.TogglePause, front_loaded && !link_in_room() },
             FrontMenuItem { "Reset", "Ctrl+R", FrontAction.Reset, front_loaded },
             FrontMenuItem { "", "", FrontAction.None, false },
             FrontMenuItem { "BIOS Settings...", "", FrontAction.StartBios, true },

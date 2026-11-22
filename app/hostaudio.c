@@ -67,10 +67,27 @@ bool hostaudio_open(int64_t rate) {
     return true;
 }
 
+/* Source-rate stereo frames, so frontend pacing keeps the same time budget
+   regardless of whether the native output is 44.1, 48 or another kHz rate. */
+int64_t hostaudio_queued(void) {
+    if (!ha_stream) return 0;
+    int bytes = SDL_GetAudioStreamQueued(ha_stream);
+    return bytes > 0 ? ((int64_t)bytes / 4) * ha_resample.in_rate / ha_resample.out_rate : 0;
+}
+
 /* Append interleaved stereo samples to the stream. */
-void hostaudio_push(ha_i16_slice pcm) {
+void hostaudio_push(ha_i16_slice pcm, int64_t target) {
     if (!ha_stream || pcm.len <= 0) return;
     size_t frames = (size_t)pcm.len / 2;
+    // Netplay runs on the wall clock. Adjust output independently to keep
+    // the device queue near its target without changing the game clock.
+    const int64_t nominal = ha_resample.in_rate;
+    int64_t queued = target > 0 ? hostaudio_queued() : 0;
+    int64_t correction = target > 0 ? (queued - target) / 4 : 0;
+    const int64_t limit = nominal / 50;
+    if (correction > limit) correction = limit;
+    if (correction < -limit) correction = -limit;
+    ha_resample.step = (uint32_t)(nominal + correction);
     size_t needed = ha_resampler_bound(&ha_resample, frames);
     if (needed > ha_capacity) {
         int16_t *grown = realloc(ha_converted, needed * sizeof(*grown));
@@ -78,18 +95,18 @@ void hostaudio_push(ha_i16_slice pcm) {
         ha_converted = grown; ha_capacity = needed;
     }
     size_t count = ha_resampler_process(&ha_resample, pcm.data, frames, ha_converted);
+    // Large bursts after a host stall must not build up unbounded latency.
+    // Keep the interpolation history moving even when the queue is full.
+    if (target > 0) {
+        int64_t remaining = 2 * target - queued;
+        if (remaining <= 0) return;
+        uint64_t samples = (uint64_t)remaining * ha_resample.out_rate / nominal * 2;
+        if (samples < count) count = (size_t)samples;
+    }
     if (ha_volume != 100) {
         for (size_t i = 0; i < count; i++) ha_converted[i] = (int16_t)((int32_t)ha_converted[i] * ha_volume / 100);
     }
     if (count) SDL_PutAudioStreamData(ha_stream, ha_converted, (int)(count * sizeof(*ha_converted)));
-}
-
-/* Source-rate stereo frames, so frontend pacing keeps the same time budget
-   regardless of whether the native output is 44.1, 48 or another kHz rate. */
-int64_t hostaudio_queued(void) {
-    if (!ha_stream) return 0;
-    int bytes = SDL_GetAudioStreamQueued(ha_stream);
-    return bytes > 0 ? ((int64_t)bytes / 4) * ha_resample.in_rate / ha_resample.out_rate : 0;
 }
 
 void hostaudio_close(void) {

@@ -43,18 +43,46 @@ int64_t hostaudio_self_test(void) {
     const int16_t expected[] = {0, 10, 50, 20, 100, 30, 150, 40, 200, 50};
     check("open", hostaudio_open(24000));
     check("stream consumes native-rate samples", source_rate == 48000);
-    hostaudio_push((ha_i16_slice){input, 2});
-    hostaudio_push((ha_i16_slice){input + 2, 4});
+    hostaudio_push((ha_i16_slice){input, 2}, 0);
+    hostaudio_push((ha_i16_slice){input + 2, 4}, 0);
     check("interpolation across pushes", captured_count == 10 && !memcmp(captured, expected, sizeof(expected)));
     queued_bytes = 10176;
     check("queue converted to source-rate frames", hostaudio_queued() == 1272);
     hostaudio_clear();
-    hostaudio_push((ha_i16_slice){input + 4, 2});
+    hostaudio_push((ha_i16_slice){input + 4, 2}, 0);
     check("clear resets previous pair and phase", captured_count == 2 && captured[0] == 200 && captured[1] == 50);
     hostaudio_clear(); hostaudio_volume(27);
     const int16_t signed_pair[] = {-101, 101};
-    hostaudio_push((ha_i16_slice){signed_pair, 2});
+    hostaudio_push((ha_i16_slice){signed_pair, 2}, 0);
     check("volume uses signed integer truncation", captured_count == 2 && captured[0] == -27 && captured[1] == 27);
+    hostaudio_clear(); hostaudio_volume(100);
+    // Feed 318 source frames per tick while the simulated device consumes
+    // slightly more or less than the nominal 636 output frames.
+    const int16_t silence[636] = {0};
+    const ha_i16_slice frame = {silence, 636};
+    const int64_t target = 1272;
+    const int drains[] = {633, 639};
+    for (size_t device = 0; device < sizeof(drains) / sizeof(*drains); device++) {
+        hostaudio_clear();
+        queued_bytes = (int)target * 8;
+        bool stable = true;
+        for (int tick = 0; tick < 3000; tick++) {
+            captured_count = 0;
+            hostaudio_push(frame, target);
+            queued_bytes -= drains[device] * 4;
+            int64_t queued = hostaudio_queued();
+            if (queued < 600 || queued > 1900) stable = false;
+        }
+        check(device == 0 ? "queue adapts to a slower device" : "queue adapts to a faster device", stable);
+    }
+    hostaudio_clear();
+    for (int i = 0; i < 20; i++) {
+        captured_count = 0;
+        hostaudio_push(frame, target);
+    }
+    check("queue stays bounded when the device stops draining", hostaudio_queued() == 2 * target);
+    hostaudio_clear();
+    check("clear restores the nominal conversion step", ha_resample.step == ha_resample.in_rate);
     hostaudio_close();
     check("close releases scratch", !ha_converted && ha_capacity == 0);
     hostaudio_volume(100);
@@ -81,7 +109,7 @@ int64_t hostaudio_self_test(void) {
     check("full-scale transition avoids overflow", n == 6 && !memcmp(whole, extreme_expected, sizeof(extreme_expected)));
     native_rate = 44100; captured_count = 0; queued_bytes = 0;
     check("reopen at fractional device rate", hostaudio_open(24000) && source_rate == native_rate);
-    hostaudio_push((ha_i16_slice){input, 6});
+    hostaudio_push((ha_i16_slice){input, 6}, 0);
     check("fractional output length", captured_count == 8);
     hostaudio_close();
     format_ok = false;

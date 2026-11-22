@@ -61,7 +61,7 @@ fn front_load_rom(path: const u8[:], for_link: bool) -> bool {
         front_notify("Selected BIOS missing or invalid; using direct boot");
     }
     if !front_boot(image[..], bios[..]) { return false; }
-    if !for_link && (link_active() || link_stage == LinkStage.Joining) { link_end("Left Swan Revival"); }
+    if !for_link && link_in_room() { link_end("Left Swan Revival"); }
     var absolute: u8[4096] = [0; 4096];
     let path_len = host_absolute_path(path, absolute[..]);
     front_path = if path_len > 0 && path_len < 4096 { str(absolute[..path_len]) } else { str(path) };
@@ -89,7 +89,7 @@ fn front_start_bios() {
     var image: u8[65536] = [0; 65536];
     image[0] = 0xF4; image[65520] = 0xEA; image[65524] = 0x40;
     if !front_boot(image[..], bios[..]) { return; }
-    if link_active() || link_stage == LinkStage.Joining { link_end("Left Swan Revival"); }
+    if link_in_room() { link_end("Left Swan Revival"); }
     front_path = []; front_label = str("BIOS Settings");
     // Like Swanium, hold Start briefly to enter the console settings.
     front_bios_start = 12;

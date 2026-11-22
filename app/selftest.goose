@@ -50,6 +50,11 @@ fn frontend_test() {
     link_needs_relink = false;
     link_dialog = false;
     delete_file(link_token_path());
+    link_stage = LinkStage.Joining;
+    front_toggle_pause();
+    front_pick_rom();
+    frontend_check("joining blocks emulation pause and ROM picker", !front_paused && !front_dialog);
+    link_stage = LinkStage.Idle;
     settings_writable = true;
     frontend_check("atomic save", settings_save());
     var data: u8[>..] = [];
@@ -221,6 +226,10 @@ fn front_smoke_before() {
         if !worker { return; }
         link_stage = LinkStage.Seated;
         link_peer = true;
+        let paused = front_paused;
+        front_toggle_pause();
+        front_pick_rom();
+        frontend_check("room blocks emulation pause and ROM picker", front_paused == paused && !front_dialog);
         link_open_dialog();
     }
     if t == 91 && link_stage == LinkStage.Seated {

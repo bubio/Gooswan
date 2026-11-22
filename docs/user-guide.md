@@ -60,7 +60,7 @@ Vertical games are detected from the cartridge footer and rotate the screen auto
 3. In Gooswan, enter the room code under **Emu > Link Play** and select **Join**. In MesenCE with RevivalGate release 7 or later, use **Tools > Link play (WonderSwan)**. Joining restarts the game with the cable attached.
 4. Once both players have joined, select **Ready** in each emulator's link dialog. When the cable connects, return to the game and start its communication mode. For **GUNPEY**, connect the cable before advancing from the opening demo to the title screen so **2PLAYER** appears.
 
-Use **Leave or cancel** to disconnect. Resetting or opening a different game leaves the room. Save states are unavailable while the cable is attached. On Windows, keep `gooswan-link.exe` beside `Gooswan.exe` when moving the application. The Swan Revival device token is stored separately from settings in the configuration directory.
+Use **Leave or cancel** to disconnect. Resetting or opening a recent game leaves the room. Leave the room before pausing or opening the ROM picker. Save states are unavailable while the cable is attached. On Windows, keep `gooswan-link.exe` beside `Gooswan.exe` when moving the application. The Swan Revival device token is stored separately from settings in the configuration directory.
 
 ## Save data
 

@@ -21,8 +21,10 @@ import (
 
 const service = "https://wg.swanrevival.com"
 const maxFrame = 8192
+const roomSeatTimeout = 10 * time.Second
 
 var errLinkRequired = errors.New("Link your Swan Revival account first")
+var errSeatTimeout = errors.New("Swan Revival timed out assigning a seat. Try joining again.")
 
 const roomAlphabet = "23456789ABCDEFGHJKMNPQRSTUVWXYZ"
 
@@ -123,12 +125,18 @@ func roomError(code string) error {
 	return errors.New("Swan Revival rejected the connection")
 }
 
-func roomDownload(ctx context.Context, ws *websocket.Conn, out io.Writer) error {
+func roomDownload(ctx context.Context, ws *websocket.Conn, out io.Writer, seatTimeout time.Duration, seatArrived chan<- struct{}) error {
+	seatCtx, stopSeat := context.WithTimeout(ctx, seatTimeout)
+	defer stopSeat()
+	readCtx := seatCtx
 	var flags byte
 	seated, started := false, false
 	for {
-		kind, data, err := ws.Read(ctx)
+		kind, data, err := ws.Read(readCtx)
 		if err != nil {
+			if !seated && errors.Is(seatCtx.Err(), context.DeadlineExceeded) && ctx.Err() == nil {
+				return errSeatTimeout
+			}
 			return errors.New("Swan Revival room disconnected")
 		}
 		if kind == websocket.MessageBinary {
@@ -148,6 +156,8 @@ func roomDownload(ctx context.Context, ws *websocket.Conn, out io.Writer) error 
 				return errors.New("The other player left the room")
 			case msg.Seat != nil && !seated:
 				seated = true
+				readCtx = ctx
+				stopSeat()
 				if msg.Overrun == "new" {
 					flags |= 1
 				}
@@ -155,6 +165,7 @@ func roomDownload(ctx context.Context, ws *websocket.Conn, out io.Writer) error 
 					flags |= 2
 				}
 				err = writeFrame(out, 'J', nil)
+				close(seatArrived)
 			case msg.Peer != nil && seated && !started:
 				err = writeFrame(out, 'P', []byte{boolByte(!bytes.Equal(msg.Peer, []byte("null")))})
 			case msg.Start != nil && seated && !started:
@@ -205,7 +216,7 @@ func roomUpload(ctx context.Context, ws *websocket.Conn, input <-chan frame) err
 	}
 }
 
-func join(ctx context.Context, in io.Reader, out io.Writer, url, token string) error {
+func join(ctx context.Context, in io.Reader, out io.Writer, url, token string, seatTimeout time.Duration) error {
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 	dialCtx, stopDial := context.WithTimeout(ctx, 10*time.Second)
@@ -246,9 +257,17 @@ func join(ctx context.Context, in io.Reader, out io.Writer, url, token string) e
 			}
 		}
 	}()
+	seatArrived := make(chan struct{})
 	result := make(chan error, 2)
-	go func() { result <- roomDownload(ctx, ws, out) }()
-	go func() { result <- roomUpload(ctx, ws, input) }()
+	go func() { result <- roomDownload(ctx, ws, out, seatTimeout, seatArrived) }()
+	go func() {
+		select {
+		case <-seatArrived:
+			result <- roomUpload(ctx, ws, input)
+		case <-ctx.Done():
+			result <- ctx.Err()
+		}
+	}()
 	err = <-result
 	cancel()
 	<-result // no concurrent writes to the desktop pipe when reporting an error
@@ -274,7 +293,7 @@ func run(in io.Reader, out io.Writer, tokenFile string) error {
 	if err != nil || len(token) == 0 || len(token) > maxFrame {
 		return errLinkRequired
 	}
-	return join(ctx, in, out, "wss://wg.swanrevival.com/room/"+code, strings.TrimSpace(string(token)))
+	return join(ctx, in, out, "wss://wg.swanrevival.com/room/"+code, strings.TrimSpace(string(token)), roomSeatTimeout)
 }
 
 func main() {

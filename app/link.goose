@@ -21,6 +21,7 @@ var link_device_len:     i64     = 0;
 var link_message:        u8[>..] = [];
 
 fn link_active() -> bool { return link_stage == LinkStage.Seated || link_stage == LinkStage.Linked; }
+fn link_in_room() -> bool { return link_stage == LinkStage.Joining || link_active(); }
 fn link_token_path() -> u8[>..] { return config_path("swan-revival-token"); }
 fn link_refresh_account() {
     link_account_linked = settings_dir.len > 0 && !link_needs_relink && file_exists(link_token_path());

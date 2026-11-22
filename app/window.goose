@@ -54,6 +54,7 @@ fn front_close_settings() {
 }
 fn front_pick_rom() {
     if front_dialog { return; }
+    if link_in_room() { front_notify("Leave the room before opening a ROM"); return; }
     if hostdialog_open(front_path) { front_dialog = true; front_capture = -1; front_resync(); }
     else { front_notify("Could not open file picker"); }
 }
