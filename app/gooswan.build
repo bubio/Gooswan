@@ -1,1 +1,4 @@
-c_sources = ["hostaudio.c", "hostplatform.c", "vendor/tomlc99/toml.c"];
+c_sources = ["hostaudio.c", "hostplatform.c", "hostconfig.c", "hostpath.c", "vendor/tomlc99/toml.c"];
+c_sources_macos = ["hostpath_macos.c", "hostpath_posix.c"];
+c_sources_linux = ["hostpath_linux.c", "hostpath_posix.c"];
+c_sources_windows = ["hostpath_windows.c"];

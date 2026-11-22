@@ -18,7 +18,16 @@ var front_recent_reopen:   bool = false;
 var front_pre_mute:        i64  = 100;
 
 // Measure the same rows that are drawn, in logical pixels using the active font.
-struct FrontMenuItem { title: const u8[:], shortcut: const u8[:], action: i64, enabled: bool, checked: bool = false }
+enum FrontAction {
+    None, PickRom, LoadRom, ClearHistory, SaveState, LoadState, OpenSettings,
+    OpenAbout, Quit, TogglePause, Reset, StartBios, ToggleFullscreen,
+    OpenBiosDirectory, CloseSettings, OpenRecent,
+    Scale { value: i64 }, Rotate { value: i64 }, Filter { linear: bool },
+}
+var front_action = FrontAction.None;
+var front_open_path: u8[>..] = [];
+
+struct FrontMenuItem { title: const u8[:], shortcut: const u8[:], action: FrontAction, enabled: bool, checked: bool = false }
 struct FrontMenuSize { width: f32 = 0.0, height: f32 = 0.0 }
 fn front_menu_style() -> ui::Style {
     var s = ui::style(front_ui);
@@ -44,7 +53,7 @@ fn front_menu_measure(items: const FrontMenuItem[:]) -> FrontMenuSize {
     var size = FrontMenuSize {};
     var shortcut_width: f32 = 0.0;
     for item in items {
-        if item.action == 0 { size.height += front_menu_separator_height(); }
+        if item.action == FrontAction.None { size.height += front_menu_separator_height(); }
         else {
             size.height += front_menu_row_height();
             size.width = max(size.width, front_menu_text_width(item.title));
@@ -78,7 +87,7 @@ fn front_action_menu(label: const u8[:], id: const u8[:], items: const FrontMenu
         ui::layout_row_dynamic(c, body, 1);
         if ui::group_begin(c, id, 0) {
             for item in items {
-                if item.action == 0 { front_menu_sep(); }
+                if item.action == FrontAction.None { front_menu_sep(); }
                 else {
                     ui::layout_row_dynamic(c, front_menu_row_height(), 1);
                     front_item(item.title, item.shortcut, item.action, item.enabled, checks, item.checked);
@@ -86,11 +95,11 @@ fn front_action_menu(label: const u8[:], id: const u8[:], items: const FrontMenu
             }
             ui::group_end(c);
         }
-        if front_action != 0 { ui::menu_close(c); }
+        if front_action != FrontAction.None { ui::menu_close(c); }
         ui::menu_end(c);
     }
 }
-fn front_item(title: const u8[:], shortcut: const u8[:], action: i64, enabled: bool, checks: bool, checked: bool) {
+fn front_item(title: const u8[:], shortcut: const u8[:], action: FrontAction, enabled: bool, checks: bool, checked: bool) {
     let c = front_ui;
     if !enabled { ui::widget_disable_begin(c); }
     let bounds = ui::widget_bounds(c);
@@ -141,37 +150,37 @@ fn front_draw_ui() {
     ui::window_set_bounds(c, "Menu", ui::rect(0.0, 0.0, ww, FRONT_MENU_HEIGHT));
     if ui::begin(c, "Menu", ui::rect(0.0, 0.0, ww, FRONT_MENU_HEIGHT), front_window_flags(ui::WINDOW_NO_SCROLLBAR)) {
         let file_items: FrontMenuItem[10] = [
-            FrontMenuItem { "Open ROM...", "Ctrl+O", 1, !front_dialog },
-            FrontMenuItem { "Open Recent...", "", 15, settings.recent_count > 0 },
-            FrontMenuItem { "", "", 0, false },
-            FrontMenuItem { "Save State", "Ctrl+S", 4, front_path.len > 0 },
-            FrontMenuItem { "Load State", "Ctrl+L", 5, front_path.len > 0 },
-            FrontMenuItem { "", "", 0, false },
-            FrontMenuItem { "Settings...", "Ctrl+,", 6, true },
-            FrontMenuItem { "About Gooswan...", "", 7, true },
-            FrontMenuItem { "", "", 0, false },
-            FrontMenuItem { "Quit", "Ctrl+Q", 8, true },
+            FrontMenuItem { "Open ROM...", "Ctrl+O", FrontAction.PickRom, !front_dialog },
+            FrontMenuItem { "Open Recent...", "", FrontAction.OpenRecent, settings.recent_count > 0 },
+            FrontMenuItem { "", "", FrontAction.None, false },
+            FrontMenuItem { "Save State", "Ctrl+S", FrontAction.SaveState, front_path.len > 0 },
+            FrontMenuItem { "Load State", "Ctrl+L", FrontAction.LoadState, front_path.len > 0 },
+            FrontMenuItem { "", "", FrontAction.None, false },
+            FrontMenuItem { "Settings...", "Ctrl+,", FrontAction.OpenSettings, true },
+            FrontMenuItem { "About Gooswan...", "", FrontAction.OpenAbout, true },
+            FrontMenuItem { "", "", FrontAction.None, false },
+            FrontMenuItem { "Quit", "Ctrl+Q", FrontAction.Quit, true },
         ];
         let emu_items: FrontMenuItem[4] = [
-            FrontMenuItem { if front_paused { "Resume" } else { "Pause" }, "Ctrl+P", 9, front_loaded },
-            FrontMenuItem { "Reset", "Ctrl+R", 10, front_loaded },
-            FrontMenuItem { "", "", 0, false },
-            FrontMenuItem { "BIOS Settings...", "", 11, true },
+            FrontMenuItem { if front_paused { "Resume" } else { "Pause" }, "Ctrl+P", FrontAction.TogglePause, front_loaded },
+            FrontMenuItem { "Reset", "Ctrl+R", FrontAction.Reset, front_loaded },
+            FrontMenuItem { "", "", FrontAction.None, false },
+            FrontMenuItem { "BIOS Settings...", "", FrontAction.StartBios, true },
         ];
         let view_items: FrontMenuItem[13] = [
-            FrontMenuItem { "Scale 1x", "", 21, true, settings.scale == 1 },
-            FrontMenuItem { "Scale 2x", "", 22, true, settings.scale == 2 },
-            FrontMenuItem { "Scale 3x", "", 23, true, settings.scale == 3 },
-            FrontMenuItem { "Scale 4x", "", 24, true, settings.scale == 4 },
-            FrontMenuItem { "", "", 0, false },
-            FrontMenuItem { "Fullscreen", "F11", 12, true, hostwindow_is_fullscreen() },
-            FrontMenuItem { "", "", 0, false },
-            FrontMenuItem { "Normal", "", 30, true, settings.rotation == 0 },
-            FrontMenuItem { "Rotate Left", "", 32, true, settings.rotation == 2 },
-            FrontMenuItem { "Rotate Right", "", 31, true, settings.rotation == 1 },
-            FrontMenuItem { "", "", 0, false },
-            FrontMenuItem { "Nearest", "", 40, true, !settings.linear },
-            FrontMenuItem { "Bilinear", "", 41, true, settings.linear },
+            FrontMenuItem { "Scale 1x", "", FrontAction.Scale { value: 1 }, true, settings.scale == 1 },
+            FrontMenuItem { "Scale 2x", "", FrontAction.Scale { value: 2 }, true, settings.scale == 2 },
+            FrontMenuItem { "Scale 3x", "", FrontAction.Scale { value: 3 }, true, settings.scale == 3 },
+            FrontMenuItem { "Scale 4x", "", FrontAction.Scale { value: 4 }, true, settings.scale == 4 },
+            FrontMenuItem { "", "", FrontAction.None, false },
+            FrontMenuItem { "Fullscreen", "F11", FrontAction.ToggleFullscreen, true, hostwindow_is_fullscreen() },
+            FrontMenuItem { "", "", FrontAction.None, false },
+            FrontMenuItem { "Normal", "", FrontAction.Rotate { value: 0 }, true, settings.rotation == 0 },
+            FrontMenuItem { "Rotate Left", "", FrontAction.Rotate { value: 2 }, true, settings.rotation == 2 },
+            FrontMenuItem { "Rotate Right", "", FrontAction.Rotate { value: 1 }, true, settings.rotation == 1 },
+            FrontMenuItem { "", "", FrontAction.None, false },
+            FrontMenuItem { "Nearest", "", FrontAction.Filter { linear: false }, true, !settings.linear },
+            FrontMenuItem { "Bilinear", "", FrontAction.Filter { linear: true }, true, settings.linear },
         ];
         ui::menubar_begin(c);
         // Extra space belongs to header cells, not to the popup item spacing.
@@ -264,7 +273,7 @@ fn front_draw_welcome(ww: f32, hh: f32) {
         ui::layout_row_dynamic(c, 28.0, 1); ui::label(c, "Gooswan", ui::TEXT_CENTERED);
         ui::layout_row_dynamic(c, 22.0, 1); ui::label_colored(c, "WonderSwan / WonderSwan Color", ui::TEXT_CENTERED, UI_MUTED);
         front_gap(8.0); ui::layout_row_dynamic(c, 28.0, 1);
-        if ui::button_label(c, "Open ROM...") { front_action = 1; }
+        if ui::button_label(c, "Open ROM...") { front_action = FrontAction.PickRom; }
     }
     ui::end(c); ui::set_style(c, saved);
 }
@@ -285,7 +294,7 @@ fn front_draw_settings(ww: f32, hh: f32) {
         ui::layout_row_begin(c, ui::STATIC, 26.0, 2);
         ui::layout_row_push(c, max(w - 122.0, 60.0));
         ui::label_colored(c, if settings_writable { "Changes are saved automatically." } else { "settings.toml needs repair; writes disabled." }, ui::TEXT_LEFT, UI_MUTED);
-        ui::layout_row_push(c, 88.0); if ui::button_label(c, "Close") { front_action = 14; }
+        ui::layout_row_push(c, 88.0); if ui::button_label(c, "Close") { front_action = FrontAction.CloseSettings; }
         ui::layout_row_end(c);
     }
     ui::end(c);
@@ -302,7 +311,7 @@ fn front_rom_settings() {
     }
     if front_box("BiosFiles", "BIOS ROMs", 98.0) {
         ui::layout_row_static(c, 26.0, 212, 1);
-        if ui::button_label(c, "Open ROM Directory") { front_action = 13; }
+        if ui::button_label(c, "Open ROM Directory") { front_action = FrontAction.OpenBiosDirectory; }
         ui::layout_row_dynamic(c, 18.0, 1); ui::label_colored(c, "Use ws_irom.bin, wsc_irom.bin or wc_irom.bin.", ui::TEXT_LEFT, UI_MUTED);
         ui::group_end(c);
     }
@@ -349,12 +358,12 @@ fn front_draw_recent(ww: f32, hh: f32) {
         if ui::group_begin(c, "RecentList", 0) {
             ui::layout_row_dynamic(c, 26.0, 1);
             for i in settings.recent_count {
-                if ui::button_label(c, front_basename(settings.recent[i].bytes[..settings.recent[i].len])) { front_open_path = str(settings.recent[i].bytes[..settings.recent[i].len]); front_action = 2; front_recent = false; }
+                if ui::button_label(c, front_basename(settings.recent[i].bytes[..settings.recent[i].len])) { front_open_path = str(settings.recent[i].bytes[..settings.recent[i].len]); front_action = FrontAction.LoadRom; front_recent = false; }
             }
             ui::group_end(c);
         }
         ui::layout_row_dynamic(c, 26.0, 2);
-        if ui::button_label(c, "Clear History") { front_action = 3; }
+        if ui::button_label(c, "Clear History") { front_action = FrontAction.ClearHistory; }
         if ui::button_label(c, "Close") { front_recent = false; }
     }
     ui::end(c); if ui::window_is_hidden(c, "Recent ROMs") { front_recent = false; }
@@ -372,25 +381,31 @@ fn front_draw_about(ww: f32, hh: f32) {
     ui::end(c); if ui::window_is_hidden(c, "About Gooswan") { front_about = false; }
 }
 fn front_do_action() {
-    let action = front_action; front_action = 0;
-    // Dialogs are opened only after all current windows have consumed input,
-    // so a menu click cannot also toggle an option in the newly opened window.
-    if action == 1 { front_pick_rom(); }
-    else if action == 2 { let path = str(front_open_path); front_load(path); }
-    else if action == 3 { settings.recent_count = 0; settings_save(); }
-    else if action == 4 { front_save_state(); }
-    else if action == 5 { front_load_state(); }
-    else if action == 6 { front_open_settings(); }
-    else if action == 7 { front_open_about(); }
-    else if action == 8 { front_running = false; }
-    else if action == 9 { front_paused = !front_paused; front_resync(); }
-    else if action == 10 { front_reset(); }
-    else if action == 11 { front_start_bios(); }
-    else if action == 12 { front_toggle_fullscreen(); }
-    else if action == 13 { let dir = config_path("bios"); if !app_mkdirs(dir) || !host_open_directory(dir) { front_notify("Could not open BIOS directory"); } }
-    else if action == 14 { front_close_settings(); }
-    else if action == 15 { front_open_recent(); }
-    else if action >= 21 && action <= 24 { front_set_scale(action - 20); }
-    else if action >= 30 && action <= 32 { front_set_rotation(action - 30); }
-    else if action == 40 || action == 41 { settings.linear = action == 41; settings_save(); }
+    let action = front_action;
+    front_action = FrontAction.None;
+    // Wait until existing windows have consumed input before opening a dialog.
+    match action {
+        None => {},
+        PickRom => front_pick_rom(),
+        LoadRom => { let path = str(front_open_path); front_load(path); },
+        ClearHistory => { settings.recent_count = 0; settings_save(); },
+        SaveState => front_save_state(),
+        LoadState => front_load_state(),
+        OpenSettings => front_open_settings(),
+        OpenAbout => front_open_about(),
+        Quit => { front_running = false; },
+        TogglePause => front_toggle_pause(),
+        Reset => front_reset(),
+        StartBios => front_start_bios(),
+        ToggleFullscreen => front_toggle_fullscreen(),
+        OpenBiosDirectory => {
+            let dir = config_path("bios");
+            if !app_mkdirs(dir) || !host_open_directory(dir) { front_notify("Could not open BIOS directory"); }
+        },
+        CloseSettings => front_close_settings(),
+        OpenRecent => front_open_recent(),
+        Scale scale => front_set_scale(scale.value),
+        Rotate rotation => front_set_rotation(rotation.value),
+        Filter filter => { settings.linear = filter.linear; settings_save(); },
+    }
 }

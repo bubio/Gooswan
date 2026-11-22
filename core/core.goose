@@ -13,7 +13,9 @@ namespace core;
 import std;
 import ports;
 import cpu;
+import cpu_timing;
 import bus;
+import dma;
 import eeprom;
 import ppu;
 import rtc;
@@ -65,7 +67,7 @@ fn is_vertical() -> bool {
 // Power on with a cartridge image (the whole .ws/.wsc file).
 fn power_on(image: const u8[:]) {
     rom = [];
-    for i in image.len { rom.push(image[i]); }
+    rom.append(image);
     ws_boot();
 }
 
@@ -111,8 +113,7 @@ fn save_read(kind: i64, out: u8[>..]&) {
     }
 }
 fn save_load(kind: i64, data: const u8[:]) {
-    var n: i64 = save_size(kind);
-    if data.len < n { n = data.len; }
+    let n = min(save_size(kind), data.len);
     for i in n {
         if kind == SAVE_SRAM { sram[i] = data[i]; }
         else if kind == SAVE_CART_EEPROM { ee_data[i] = data[i]; }

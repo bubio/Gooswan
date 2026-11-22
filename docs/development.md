@@ -132,4 +132,11 @@ core/: CPU (V30MZ), Bus, Interrupts, Timers, DMA, PPU, APU, EEPROM, Cartridge, R
 - `tests/`, `scripts/` — test data fetch, regression battery, CI builds
 - `docs/` — research notes, decisions and session logs
 
+Goose's build sidecar (`app/gooswan.build`) selects the native path adapter for
+macOS, Linux or Windows. macOS and Linux share POSIX path resolution.
+SDL windowing, audio and TOML adapters are shared across all three targets.
+The shared packaging entry points in `scripts/package_app.py` and
+`scripts/check_package.py` delegate bundle creation and payload checks to
+each platform's module.
+
 The compact Nuklear UI uses the bundled M PLUS 1p Japanese font, readable selection indicators, grouped settings tabs and scrollable ROM history; its layout follows UsaProject.

@@ -31,6 +31,9 @@ fn frontend_test() {
     frontend_check("rotation left", front_rotate_pads(core::KEY_X1 | core::KEY_Y4 | core::KEY_A, 2) == (core::KEY_X2 | core::KEY_Y1 | core::KEY_A));
     frontend_check("rotation right", front_rotate_pads(core::KEY_X1 | core::KEY_START, 1) == (core::KEY_X4 | core::KEY_START));
     frontend_check("rotation normal", front_rotate_pads(0xFFF, 0) == 0xFFF);
+    frontend_check("video normal is row-major", front_video_pixel_index(7, 19, 0) == 19 * core::SCREEN_W + 7);
+    frontend_check("video rotates right", front_video_pixel_index(7, 19, 1) == 7 * core::SCREEN_H + (core::SCREEN_H - 20));
+    frontend_check("video rotates left", front_video_pixel_index(7, 19, 2) == (core::SCREEN_W - 8) * core::SCREEN_H + 19);
     // Explicitly isolated path, so this test never changes real user settings.
     var tmp: u8[>..] = [];
     env("TMPDIR", tmp); if tmp.len == 0 { env("TEMP", tmp); } if tmp.len == 0 { tmp = str("/tmp"); }
@@ -239,8 +242,8 @@ fn frontend_dialog_test() {
     gfx::inject_mouse(16.0, 12.0, gfx::MOUSE_LEFT, false); frontend_dialog_frame();
     frontend_check("File menu opens before native dialog", front_menu_open);
     gfx::inject_mouse(65.0, 44.0, gfx::MOUSE_LEFT, true); frontend_dialog_frame();
-    frontend_check("Open ROM menu action selected", front_action == 1);
-    front_action = 0; front_dialog = true;
+    frontend_check("Open ROM menu action selected", front_action == FrontAction.PickRom);
+    front_action = FrontAction.None; front_dialog = true;
     // Both the button-up and modifier-up can be consumed by a modal loop.
     ui::input_begin(front_ui); ui::input_key(front_ui, ui::KEY_CTRL, true); ui::input_end(front_ui);
     let context = front_ui.id;
@@ -255,7 +258,7 @@ fn frontend_dialog_test() {
     gfx::inject_mouse(16.0, 12.0, gfx::MOUSE_LEFT, false); frontend_dialog_frame();
     frontend_check("File menu reopens after Cancel", front_menu_open);
     gfx::inject_mouse(60.0, 154.0, gfx::MOUSE_LEFT, true); frontend_dialog_frame();
-    frontend_check("Settings menu works after Cancel", front_action == 6);
+    frontend_check("Settings menu works after Cancel", front_action == FrontAction.OpenSettings);
     front_do_action();
     gfx::inject_mouse(60.0, 154.0, gfx::MOUSE_LEFT, false); frontend_dialog_frame();
     frontend_check("Settings window opens after Cancel", front_settings);
@@ -269,7 +272,7 @@ fn frontend_dialog_test() {
     gfx::inject_mouse(16.0, 12.0, gfx::MOUSE_LEFT, false); frontend_dialog_frame();
     frontend_check("File menu reopens after native error", front_menu_open && !front_dialog);
     gfx::inject_mouse(65.0, 44.0, gfx::MOUSE_LEFT, true); frontend_dialog_frame();
-    frontend_check("Open ROM can be requested again", front_action == 1);
+    frontend_check("Open ROM can be requested again", front_action == FrontAction.PickRom);
     ui::destroy(front_ui); if front_font_atlas.id != 0 { ui::destroy(front_font_atlas); }
     gfx::close();
     print("dialog_test: ", frontend_pass, " passed, ", frontend_fail, " failed");

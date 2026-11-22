@@ -7,6 +7,9 @@ import ctypes
 from ctypes import wintypes
 from pathlib import Path
 import struct
+import tempfile
+
+from package_common import ROOT, RELEASES, archive, copy_file, documents
 
 
 def resource_block(key, value=b'', children=(), kind=0, value_length=None):
@@ -142,3 +145,16 @@ def prepare(executable: Path, icon: Path, version: str):
     struct.pack_into('<H', data, optional + 68, 2)  # WINDOWS_GUI
     struct.pack_into('<I', data, optional + 64, 0)
     executable.write_bytes(data)
+
+
+def package_windows(binary, release, arch):
+    output = RELEASES / f'gooswan-{release}-windows-{arch}.zip'
+    with tempfile.TemporaryDirectory(prefix='gooswan-package-') as temp:
+        stage = Path(temp)
+        folder = stage / 'Gooswan'
+        documents(folder)
+        executable = folder / 'Gooswan.exe'
+        copy_file(binary, executable)
+        prepare(executable, ROOT / 'assets/icons/Gooswan.ico', release)
+        executable.chmod(0o755)
+        return [archive(stage, output)]

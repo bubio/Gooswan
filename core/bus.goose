@@ -1,5 +1,5 @@
 // Gooswan bus/system: WonderSwan memory map, I/O ports, timers,
-// interrupt latching and delivery, GDMA / sound DMA, the serial
+// interrupt latching and delivery, the serial
 // TX-ready level, and machine boot + one frame (ws_boot/ws_frame).
 namespace core;
 
@@ -232,92 +232,6 @@ fn refresh_serial() {
     // with the serial left enabled, and an instantly-pending
     // non-acknowledged IRQ would livelock that test on the spot.
     if model_mono && ((io_ports[INT_ENABLE] as i64) & 1) != 0 && ((io_ports[SERIAL_STATUS] as i64) & 0x80) != 0 { int_cause |= 0x01; }
-}
-
-var gdma_stall: i64 = 0;
-
-fn run_gdma() {
-    var src: i64 = (((io_ports[GDMA_SRC_HI] as i64) & 0x0F) << 16) | (io_ports[GDMA_SRC_LO] | ((io_ports[GDMA_SRC_LO + 1] as i64) << 8));
-    var dst: i64 = io_ports[GDMA_DST] | ((io_ports[GDMA_DST + 1] as i64) << 8);
-    var len: i64 = io_ports[GDMA_LEN] | ((io_ports[GDMA_LEN + 1] as i64) << 8);
-    let dec: bool = ((io_ports[GDMA_CTRL] as i64) & 0x40) != 0;
-    var moved: i64 = 0;
-    while len > 0 {
-        if src >= 0x10000 && src < 0x20000 { break; }
-        if src >= 0x80000 && src < 0x90000 && (sys_ctrl1 & 0x08) != 0 { break; }
-        wb8(dst & 0xFFFF, rd8(src));  // through the bus: mono drops writes above 16 KB (Swanium write_wram)
-        if dec { src -= 1; dst -= 1; } else { src += 1; dst += 1; }
-        src &= 0xFFFFF; dst &= 0xFFFF;
-        len -= 1;
-        moved += 1;
-    }
-    io_ports[GDMA_SRC_LO] = (src & 0xFF) as! u8;
-    io_ports[GDMA_SRC_LO + 1] = ((src >> 8) & 0xFF) as! u8;
-    io_ports[GDMA_SRC_HI] = ((src >> 16) & 0x0F) as! u8;
-    io_ports[GDMA_DST] = (dst & 0xFF) as! u8;
-    io_ports[GDMA_DST + 1] = ((dst >> 8) & 0xFF) as! u8;
-    io_ports[GDMA_LEN] = (len & 0xFF) as! u8;
-    io_ports[GDMA_LEN + 1] = ((len >> 8) & 0xFF) as! u8;
-    io_ports[GDMA_CTRL] = ((io_ports[GDMA_CTRL] as i64) & 0x7F) as! u8;
-    if moved > 0 { gdma_stall += 5 + moved; }  // charged to the OUT that started it (ws_frame), so the frame still spans 40,704 cycles
-}
-
-// ---- Sound DMA (colour only): feeds the voice data latch (port 0x89)
-// from memory on the 24 kHz cadence (one sample per 128 CPU cycles x
-// the rate divider), following Swanium's bus model. The register
-// shadows live in ports 0x4A-0x52; source/counter latch into the
-// engine (with shadows for REPEAT) when a stopped engine first ticks
-// with ENABLE set, and are written back to the ports on every step.
-var sdma_running:        bool = false;
-var sdma_clock:          i64  = 0;
-var sdma_source:         i64  = 0;
-var sdma_counter:        i64  = 0;
-var sdma_source_shadow:  i64  = 0;
-var sdma_counter_shadow: i64  = 0;
-
-fn sdma_source_from_ports() -> i64 { (((io_ports[SDMA_SRC_HI] as i64) & 0x0F) << 16) | io_ports[SDMA_SRC_LO] | ((io_ports[SDMA_SRC_LO + 1] as i64) << 8) }
-fn sdma_counter_from_ports() -> i64 { (((io_ports[SDMA_LEN_HI] as i64) & 0x0F) << 16) | io_ports[SDMA_LEN_LO] | ((io_ports[SDMA_LEN_LO + 1] as i64) << 8) }
-
-fn sdma_writeback() {
-    io_ports[SDMA_SRC_LO] = (sdma_source & 0xFF) as! u8; io_ports[SDMA_SRC_LO + 1] = ((sdma_source >> 8) & 0xFF) as! u8; io_ports[SDMA_SRC_HI] = ((sdma_source >> 16) & 0x0F) as! u8;
-    io_ports[SDMA_LEN_LO] = (sdma_counter & 0xFF) as! u8; io_ports[SDMA_LEN_LO + 1] = ((sdma_counter >> 8) & 0xFF) as! u8; io_ports[SDMA_LEN_HI] = ((sdma_counter >> 16) & 0x0F) as! u8;
-}
-
-fn sdma_step() {
-    let ctrl: i64 = io_ports[SDMA_CTRL];
-    if (ctrl & 0x04) != 0 { io_ports[SND_VOICE_SAMPLE] = 0; voice_feed(0); return; }  // HOLD: latch silence, pointers stay
-    let sb: i64 = rd8(sdma_source);
-    io_ports[SND_VOICE_SAMPLE] = sb as! u8; voice_feed(sb);
-    if (ctrl & 0x40) != 0 { sdma_source = (sdma_source - 1) & 0xFFFFF; } else { sdma_source = (sdma_source + 1) & 0xFFFFF; }
-    sdma_counter = (sdma_counter - 1) & 0xFFFFF;
-    if sdma_counter == 0 {
-        if (ctrl & 0x08) != 0 { sdma_source = sdma_source_shadow; sdma_counter = sdma_counter_shadow; }
-        else { io_ports[SDMA_CTRL] = ((io_ports[SDMA_CTRL] as i64) & 0x7F) as! u8; sdma_running = false; }
-    }
-    sdma_writeback();
-}
-
-fn sdma_tick(dc: i64) {
-    if model_mono || ((io_ports[SDMA_CTRL] as i64) & 0x80) == 0 { sdma_running = false; sdma_clock = 0; return; }
-    if !sdma_running {
-        let counter: i64 = sdma_counter_from_ports();
-        if counter == 0 { io_ports[SDMA_CTRL] = ((io_ports[SDMA_CTRL] as i64) & 0x7F) as! u8; return; }  // nothing to send: ENABLE self-clears
-        sdma_source = sdma_source_from_ports();
-        sdma_counter = counter;
-        sdma_source_shadow = sdma_source;
-        sdma_counter_shadow = sdma_counter;
-        sdma_clock = 0;
-        sdma_running = true;
-    }
-    sdma_clock += dc;
-    let rate_bits: i64 = (io_ports[SDMA_CTRL] as i64) & 3;
-    let rate:      i64 = if rate_bits == 0 { 6 } else if rate_bits == 1 { 4 } else if rate_bits == 2 { 2 } else { 1 };
-    let period:    i64 = 128 * rate;
-    while sdma_clock >= period {
-        sdma_clock -= period;
-        sdma_step();
-        if !sdma_running { sdma_clock = 0; break; }
-    }
 }
 
 // Catch the APU / DMA up to ws_cycles and run the per-scanline events

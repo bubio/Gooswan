@@ -11,7 +11,7 @@ import shutil
 import subprocess
 import tempfile
 
-from package_app import ROOT, RELEASES, archive, copy_file, documents
+from package_common import DOCUMENTS, ROOT, RELEASES, archive, copy_file, documents
 
 # SDL dlopens these libraries, so ELF dependency scanners cannot discover them.
 DEB_RUNTIME = ['libx11-6', 'libxcursor1', 'libxi6', 'libxrandr2', 'libxkbcommon0',
@@ -27,7 +27,7 @@ def install_tree(binary, tree):
     (tree / 'usr/bin/gooswan').chmod(0o755)
     copy_file(ROOT / 'packaging/linux/gooswan.desktop', tree / 'usr/share/applications/gooswan.desktop')
     copy_file(ROOT / 'assets/icons/gooswan.png', tree / 'usr/share/icons/hicolor/256x256/apps/gooswan.png')
-    for name in ('README.md', 'THIRD_PARTY_NOTICES.md', 'docs/user-guide.md'):
+    for name in DOCUMENTS:
         copy_file(ROOT / name, tree / 'usr/share/doc/gooswan' / name)
     copy_file(ROOT / 'assets/fonts/OFL.txt', tree / 'usr/share/licenses/gooswan/OFL.txt')
 

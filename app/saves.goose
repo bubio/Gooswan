@@ -6,11 +6,13 @@
 // reset and exit. BIOS boots also persist the console EEPROM independently.
 
 fn save_path(path: const u8[:], kind: i64) -> u8[>..] {
-    var name: u8[>..] = [];
-    for i in path.len { name.push(path[i]); }
-    let ext = if kind == core::SAVE_SRAM { ".sav" } else if kind == core::SAVE_CART_EEPROM { ".eep" } else if kind == core::SAVE_RTC { ".rtc" } else { ".iep" };
-    for i in ext.len { name.push(ext[i]); }
-    return name;
+    let extension = match kind {
+        core::SAVE_SRAM => ".sav",
+        core::SAVE_CART_EEPROM => ".eep",
+        core::SAVE_RTC => ".rtc",
+        _ => ".iep",
+    };
+    return str(path, extension);
 }
 
 fn load_saves(path: const u8[:], load_internal: bool = true) {
@@ -35,10 +37,12 @@ fn save_saves(path: const u8[:]) -> bool {
 
 // Console storage is keyed by the BIOS in use, never the next-boot setting.
 // Cartridge sidecars are still written for backward compatibility.
-fn bios_eeprom_path(bios_kind: i64) -> u8[>..] {
-    let name = if bios_kind == 1 { "ws_irom.iep" } else if bios_kind == 2 { "wsc_irom.iep" } else { "wc_irom.iep" };
-    return config_path(str("bios/", name));
+fn bios_path(kind: i64, extension: const u8[:]) -> u8[>..] {
+    let name = match kind { 1 => "ws_irom", 2 => "wsc_irom", _ => "wc_irom" };
+    return config_path(str("bios/", name, extension));
 }
+
+fn bios_eeprom_path(kind: i64) -> u8[>..] { return bios_path(kind, ".iep"); }
 fn read_bios_eeprom(bios_kind: i64, out: u8[>..]&) -> bool {
     if bios_kind < 1 || bios_kind > 3 || settings_dir.len == 0 { return false; }
     let path = bios_eeprom_path(bios_kind);

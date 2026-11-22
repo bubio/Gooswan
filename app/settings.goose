@@ -7,21 +7,24 @@ fn app_text(s: const u8[:]) -> AppText {
     for i in t.len { t.bytes[i] = s[i]; }
     return t;
 }
-fn app_append(out: u8[>..]&, s: const u8[:]) { for b in s { out.push(b); } }
-fn app_quote(out: u8[>..]&, s: const u8[:]) {
+fn toml_quote(out: u8[>..]&, s: const u8[:]) {
     out.push(34);
     let hex = "0123456789abcdef";
     for c in s {
         if c == 34 || c == 92 { out.push(92); out.push(c); }
         else if c < 32 || c == 127 {
-            app_append(out, "\\u00"); out.push(hex[c >> 4]); out.push(hex[c & 15]);
+            out.append("\\u00"); out.push(hex[c >> 4]); out.push(hex[c & 15]);
         } else { out.push(c); }
     }
     out.push(34);
 }
 let BUTTON_LABELS: const u8[:][11] = ["Y1", "Y2", "Y3", "Y4", "X1", "X2", "X3", "X4", "Start", "A", "B"];
-let BUTTON_BITS:   i64[11]         = [1, 2, 4, 8, 16, 32, 64, 128, 512, 1024, 2048];
-let DEFAULT_KEYS:  const u8[:][11] = ["W", "D", "S", "A", "Up", "Right", "Down", "Left", "Return", "X", "Z"];
+let BUTTON_BITS: i64[11] = [
+    core::KEY_Y1, core::KEY_Y2, core::KEY_Y3, core::KEY_Y4,
+    core::KEY_X1, core::KEY_X2, core::KEY_X3, core::KEY_X4,
+    core::KEY_START, core::KEY_A, core::KEY_B,
+];
+let DEFAULT_KEYS: const u8[:][11] = ["W", "D", "S", "A", "Up", "Right", "Down", "Left", "Return", "X", "Z"];
 // Match Swanium: X-pad on D-pad, A on east, B on south; Y-pad unbound.
 let DEFAULT_PADS: i64[11] = [-1, -1, -1, -1, 11, 14, 12, 13, 6, 1, 0];
 struct Settings {
@@ -47,7 +50,6 @@ extern fn hostconfig_free();
 extern fn hostconfig_int(section: const u8[:], key: const u8[:], fallback: i64) -> i64;
 extern fn hostconfig_bool(section: const u8[:], key: const u8[:], fallback: bool) -> bool;
 extern fn hostconfig_string(section: const u8[:], key: const u8[:], index: i64, out: u8[:]) -> i64;
-extern fn hostconfig_error(out: u8[:]) -> i64;
 extern fn host_open_directory(path: const u8[:]) -> bool;
 
 fn settings_defaults() {
@@ -65,13 +67,13 @@ fn config_path(name: const u8[:]) -> u8[>..] { return str(settings_dir, "/", nam
 fn settings_parse(source: const u8[:]) -> bool {
     if !hostconfig_parse(source) { return false; }
     settings_defaults();
-    settings.scale = clamp(hostconfig_int("", "scale", 3), 1, 4);
-    settings.volume = clamp(hostconfig_int("", "volume", 100), 0, 100);
-    settings.fullscreen = hostconfig_bool("", "fullscreen", false);
-    settings.rotation = clamp(hostconfig_int("", "rotation", 0), 0, 2);
-    settings.linear = hostconfig_bool("", "bilinear", false);
-    settings.rotate_input = hostconfig_bool("", "rotate_input_with_screen", true);
-    settings.bios = clamp(hostconfig_int("", "bios", 0), 0, 3);
+    settings.scale = clamp(hostconfig_int("", "scale", settings.scale), 1, 4);
+    settings.volume = clamp(hostconfig_int("", "volume", settings.volume), 0, 100);
+    settings.fullscreen = hostconfig_bool("", "fullscreen", settings.fullscreen);
+    settings.rotation = clamp(hostconfig_int("", "rotation", settings.rotation), 0, 2);
+    settings.linear = hostconfig_bool("", "bilinear", settings.linear);
+    settings.rotate_input = hostconfig_bool("", "rotate_input_with_screen", settings.rotate_input);
+    settings.bios = clamp(hostconfig_int("", "bios", settings.bios), 0, 3);
     for i in 10 {
         var name = default<AppText>();
         let n = hostconfig_string("", "recent_files", i, name.bytes[..]);
@@ -96,16 +98,16 @@ fn settings_encode() -> u8[>..] {
         "\nbilinear = ", settings.linear, "\nrotate_input_with_screen = ", settings.rotate_input,
         "\nbios = ", settings.bios, "\nrecent_files = [");
     for i in settings.recent_count {
-        if i > 0 { app_append(out, ", "); }
-        app_quote(out, settings.recent[i].bytes[..settings.recent[i].len]);
+        if i > 0 { out.append(", "); }
+        toml_quote(out, settings.recent[i].bytes[..settings.recent[i].len]);
     }
-    app_append(out, "]\n\n[keyboard]\n");
+    out.append("]\n\n[keyboard]\n");
     for i in 11 {
-        app_append(out, str(BUTTON_LABELS[i], " = "));
-        app_quote(out, settings.keys[i].bytes[..settings.keys[i].len]); out.push(10);
+        out.append(str(BUTTON_LABELS[i], " = "));
+        toml_quote(out, settings.keys[i].bytes[..settings.keys[i].len]); out.push(10);
     }
-    app_append(out, "\n[gamepad]\n");
-    for i in 11 { app_append(out, str(BUTTON_LABELS[i], " = ", settings.pads[i], "\n")); }
+    out.append("\n[gamepad]\n");
+    for i in 11 { out.append(str(BUTTON_LABELS[i], " = ", settings.pads[i], "\n")); }
     return out;
 }
 fn settings_save() -> bool {
@@ -120,7 +122,7 @@ fn settings_load() {
     if !env("GOOSWAN_CONFIG_DIR", settings_dir) {
         var path: u8[4096] = [0; 4096];
         let n = hostconfig_dir(path[..]);
-        if n > 0 && n < 4096 { app_append(settings_dir, path[..n]); }
+        if n > 0 && n < 4096 { settings_dir.append(path[..n]); }
     }
     if !app_mkdirs(settings_dir) {
         settings_writable = false; settings_notice = str("Cannot create configuration directory"); return;

@@ -3,7 +3,7 @@
 import argparse
 import hashlib
 from pathlib import Path
-from package_app import version
+from package_common import version
 
 
 def collect(directory, tag=None):

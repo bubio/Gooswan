@@ -9,7 +9,7 @@ import unittest
 import zipfile
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'scripts'))
-from package_app import archive, documents, version
+from package_common import archive, documents, version
 from release_assets import collect
 from windows_gui import version_resource
 
