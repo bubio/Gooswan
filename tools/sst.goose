@@ -16,6 +16,7 @@ import selftest_ppu;
 import selftest_apu;
 import selftest_eeprom;
 import selftest_state;
+import selftest_serial;
 
 fn main() {
     let argv = args();
@@ -34,6 +35,7 @@ fn main() {
     }
     if argv[1] == "mark" && argv.len > 3 { core::run_mark(argv[2], argv[3]); return; }
     if argv[1] == "bios_test" && argv.len > 4 { core::bios_test(argv[2], argv[3] == "mono", argv[4]); return; }
+    if argv[1] == "serial_test" { core::serial_test(); return; }
     if argv[1] == "state_test" { core::state_test(); return; }
     if argv[1] == "cpu_test" { core::cpu_test(); return; }
     if argv[1] == "ppu_test" { core::ppu_test(); return; }

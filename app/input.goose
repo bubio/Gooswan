@@ -54,6 +54,7 @@ fn front_shortcuts() {
         if front_settings { front_close_settings(); }
         else if front_about { front_about = false; }
         else if front_recent { front_recent = false; }
+        else if link_dialog { link_dialog = false; }
         else if hostwindow_is_fullscreen() { front_toggle_fullscreen(); }
     }
     if gfx::key_pressed("F11") { front_toggle_fullscreen(); }

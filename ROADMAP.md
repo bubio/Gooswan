@@ -4,7 +4,7 @@
 
 The desktop frontend, cartridge save media, BIOS boot, save states and native release packaging are in place. The remaining work focuses on emulation accuracy and coverage.
 
-- Model serial byte transmission and reception, including baud timing and overrun.
+- Validate Swan Revival link play against MesenCE with retail games on separate computers.
 - Review LCD off-state and indicator behaviour against hardware.
 - Continue comparing game output with Swanium and investigate functional differences in graphics, audio and input.
 - Extend interactive testing on Windows and Linux, including physical controllers and native file pickers.

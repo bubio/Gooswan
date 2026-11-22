@@ -16,4 +16,12 @@ sh ./scripts/lint.sh
 sh ./scripts/goose.sh build tools/sst.goose
 sh ./scripts/goose.sh build tools/audio_test.goose
 sh ./scripts/goose.sh build app/gooswan.goose
+(
+    cd app/link
+    case "$(uname -s)" in
+        MINGW*|MSYS*|CYGWIN*) CGO_ENABLED=0 go build -trimpath -ldflags="-H windowsgui" -o ../gooswan-link.exe ;;
+        *) CGO_ENABLED=0 go build -trimpath -o ../gooswan-link ;;
+    esac
+    if [ "$1" = "--test" ]; then go test ./...; fi
+)
 if [ "$1" = "--test" ]; then sh ./scripts/run_tests.sh; fi

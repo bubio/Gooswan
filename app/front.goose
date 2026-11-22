@@ -48,7 +48,7 @@ fn front_run_frames(max_frames: i64) -> i64 {
     }
     var ran: i64 = 0;
     while ran < FRONT_MAX_RUN {
-        if front_audio_ok {
+        if front_audio_ok && !link_active() {
             if hostaudio_queued() >= FRONT_AUDIO_AHEAD { break; }
         } else {
             let now = gfx::time();
@@ -68,6 +68,7 @@ fn front_run_frames(max_frames: i64) -> i64 {
             break;
         }
         front_audio_pump();
+        link_flush();
         ran += 1;
         front_frames += 1;
         if max_frames > 0 && front_frames >= max_frames {
@@ -98,6 +99,7 @@ fn front_main() {
     let argv = args();
     if argv.len > 1 && (argv[1] == "--help" || argv[1] == "-h") { front_help(); return; }
     if argv.len > 1 && argv[1] == "--dialog-test" { frontend_dialog_test(); return; }
+    if argv.len > 1 && argv[1] == "--link-self-test" { link_test_worker(); return; }
     if argv.len > 1 && argv[1] == "--self-test" { frontend_test(); return; }
     var max_frames: i64 = 0;
     if argv.len > 2 {
@@ -159,6 +161,7 @@ fn front_main() {
         front_smoke_before();
         front_cancel_before();
         front_poll_dialog();
+        link_poll();
         if !front_check { front_draw_ui(); }
         front_do_action();
         for b in 26 { front_pad_previous[b] = hostpad_down(b); }
@@ -180,6 +183,7 @@ fn front_main() {
         print("frontcheck: mismatches=", bad, " of ", core::SCREEN_W * core::SCREEN_H, " after ", front_frames, " frames");
         if bad != 0 || front_fault { front_save_media(); hostaudio_close(); exit(1); }
     }
+    hostlink_stop();
     front_save_media(); settings_save();
     hostaudio_close(); hostplatform_close(); ui::destroy(front_ui);
     if front_font_atlas.id != 0 { ui::destroy(front_font_atlas); }

@@ -33,7 +33,7 @@ def run(binary, cwd, smoke, appimage=False):
     env = dict(os.environ, GOOSWAN_CONFIG_DIR=str(cwd / 'config'), SDL_AUDIODRIVER='dummy')
     if appimage:
         env['APPIMAGE_EXTRACT_AND_RUN'] = '1'
-    for flag in ('--help', '--self-test', *(('--ui-smoke',) if smoke else ())):
+    for flag in ('--help', '--self-test', '--link-self-test', *(('--ui-smoke',) if smoke else ())):
         result = subprocess.run([str(binary), flag], cwd=cwd, env=env, capture_output=True, text=True, timeout=120)
         print(result.stdout, end='')
         if result.returncode:
@@ -49,10 +49,12 @@ def check(archive_path, platform, arch, smoke=False, install=False):
         folder = root / 'Gooswan'
         for name in WRAPPER_FILES:
             assert (folder / name).is_file(), name
-        payloads = [p for p in folder.iterdir() if p.suffix in ('.app', '.exe', '.deb', '.rpm', '.AppImage')]
+        payloads = [p for p in folder.iterdir() if p.name != 'gooswan-link.exe' and p.suffix in ('.app', '.exe', '.deb', '.rpm', '.AppImage')]
         assert len(payloads) == 1, 'Expected exactly one application payload'
         payload, = payloads
         expected = {payload.name, 'README.md', 'THIRD_PARTY_NOTICES.md', 'licenses', 'docs'}
+        if platform == 'windows':
+            expected.add('gooswan-link.exe')
         assert {p.name for p in folder.iterdir()} == expected, 'Unexpected distribution layout'
         # Move the application away from the wrapper docs and the source checkout.
         standalone = root / 'standalone app'
@@ -60,6 +62,8 @@ def check(archive_path, platform, arch, smoke=False, install=False):
         moved = standalone / payload.name
         shutil.move(str(payload), moved)
         payload = moved
+        if platform == 'windows':
+            shutil.move(folder / 'gooswan-link.exe', standalone / 'gooswan-link.exe')
         if platform == 'macos':
             from check_package_macos import check_architecture, check_payload
             binary = check_payload(payload)

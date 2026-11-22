@@ -7,6 +7,7 @@ import core from "../core";
 import front;
 import input;
 import session;
+import link;
 import video;
 import window;
 import saves;

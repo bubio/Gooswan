@@ -155,6 +155,7 @@ def package_windows(binary, release, arch):
         documents(folder)
         executable = folder / 'Gooswan.exe'
         copy_file(binary, executable)
+        copy_file(binary.with_name('gooswan-link.exe'), folder / 'gooswan-link.exe')
         prepare(executable, ROOT / 'assets/icons/Gooswan.ico', release)
         executable.chmod(0o755)
         return [archive(stage, output)]

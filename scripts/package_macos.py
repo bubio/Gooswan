@@ -19,6 +19,10 @@ def package_macos(binary, release, arch):
         minimum = subprocess.check_output(['vtool', '-show-build', str(binary)], text=True)
         minimum = next(line.split()[1] for line in minimum.splitlines() if line.strip().startswith('minos '))
         copy_file(binary, executable)
+        worker = resources / 'gooswan-link'
+        copy_file(binary.with_name(worker.name), worker)
+        worker.chmod(0o755)
+        subprocess.run(['codesign', '--force', '--sign', '-', str(worker)], check=True)
         copy_file(ROOT / 'assets/icons/Gooswan.icns', resources / 'Gooswan.icns')
         documents(resources)
         info = dict(CFBundleName='Gooswan', CFBundleDisplayName='Gooswan',

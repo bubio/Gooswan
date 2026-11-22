@@ -48,18 +48,20 @@ fn front_boot(image: const u8[:], bios: const u8[:]) -> bool {
     front_fault = false; front_loaded = true; front_bios_start = 0;
     return true;
 }
-fn front_load(path: const u8[:]) {
+fn front_load(path: const u8[:]) -> bool { return front_load_rom(path, false); }
+fn front_load_rom(path: const u8[:], for_link: bool) -> bool {
     var image: u8[>..] = [];
     if !read_file(path, image) || image.len < 16 || image.len > 16777216 {
-        front_notify(str("Cannot open ROM: ", path)); return;
+        front_notify(str("Cannot open ROM: ", path)); return false;
     }
-    if !front_save_media() { return; }
+    if !front_save_media() { return false; }
     var bios: u8[>..] = [];
     if settings.bios != 0 && !read_selected_bios(bios) {
         bios.clear();
         front_notify("Selected BIOS missing or invalid; using direct boot");
     }
-    if !front_boot(image[..], bios[..]) { return; }
+    if !front_boot(image[..], bios[..]) { return false; }
+    if !for_link && (link_active() || link_stage == LinkStage.Joining) { link_end("Left Swan Revival"); }
     var absolute: u8[4096] = [0; 4096];
     let path_len = host_absolute_path(path, absolute[..]);
     front_path = if path_len > 0 && path_len < 4096 { str(absolute[..path_len]) } else { str(path) };
@@ -72,6 +74,7 @@ fn front_load(path: const u8[:]) {
     settings_recent(front_path); settings_save();
     gfx::set_title(str("Gooswan - ", front_label));
     front_resize(); front_resync();
+    return true;
 }
 fn front_reset() {
     if front_path.len > 0 { let path = str(front_path); front_load(path); return; }
@@ -86,6 +89,7 @@ fn front_start_bios() {
     var image: u8[65536] = [0; 65536];
     image[0] = 0xF4; image[65520] = 0xEA; image[65524] = 0x40;
     if !front_boot(image[..], bios[..]) { return; }
+    if link_active() || link_stage == LinkStage.Joining { link_end("Left Swan Revival"); }
     front_path = []; front_label = str("BIOS Settings");
     // Like Swanium, hold Start briefly to enter the console settings.
     front_bios_start = 12;
@@ -97,6 +101,7 @@ fn front_state_path() -> u8[>..] {
     return config_path(str("states/", hash(front_path[..]), ".state"));
 }
 fn front_save_state() {
+    if link_active() { front_notify("Leave the room before saving a state"); return; }
     if !front_loaded || front_path.len == 0 { front_notify("Open a cartridge ROM first"); return; }
     if !app_mkdirs(config_path("states")) || !write_file_atomic(front_state_path(), core::save_state_bytes()) {
         front_notify("Could not write save state"); return;
@@ -104,6 +109,7 @@ fn front_save_state() {
     front_notify("State saved");
 }
 fn front_load_state() {
+    if link_active() { front_notify("Leave the room before loading a state"); return; }
     if !front_loaded || front_path.len == 0 { front_notify("Open a cartridge ROM first"); return; }
     var data: u8[>..] = [];
     if !read_file(front_state_path(), data) { front_notify("No readable save state for this ROM"); return; }

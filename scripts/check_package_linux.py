@@ -63,4 +63,5 @@ def uninstall(payload):
         subprocess.run(['apt-get', 'remove', '-y', 'gooswan'], check=True)
     else:
         subprocess.run(['dnf', 'remove', '-y', 'gooswan'], check=True)
-    assert not Path('/usr/bin/gooswan').exists(), 'Uninstall left executable behind'
+    for name in ('gooswan', 'gooswan-link'):
+        assert not (Path('/usr/bin') / name).exists(), f'Uninstall left {name} behind'

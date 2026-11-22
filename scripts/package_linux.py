@@ -24,6 +24,7 @@ RPM_RUNTIME = ['libX11.so.6()(64bit)', 'libXcursor.so.1()(64bit)', 'libXi.so.6()
 
 def install_tree(binary, tree):
     copy_file(binary, tree / 'usr/bin/gooswan')
+    copy_file(binary.with_name('gooswan-link'), tree / 'usr/bin/gooswan-link')
     (tree / 'usr/bin/gooswan').chmod(0o755)
     copy_file(ROOT / 'packaging/linux/gooswan.desktop', tree / 'usr/share/applications/gooswan.desktop')
     copy_file(ROOT / 'assets/icons/gooswan.png', tree / 'usr/share/icons/hicolor/256x256/apps/gooswan.png')
@@ -49,7 +50,7 @@ Architecture: amd64
 Maintainer: bubio <bubio@users.noreply.github.com>
 Homepage: https://github.com/bubio/Gooswan
 Installed-Size: {sum(p.stat().st_size for p in tree.rglob('*') if p.is_file()) // 1024 + 1}
-Depends: {', '.join(filter(None, [depends, *DEB_RUNTIME]))}
+Depends: {', '.join(filter(None, [depends, *DEB_RUNTIME, 'ca-certificates']))}
 Description: WonderSwan / WonderSwan Color emulator
  Keyboard and gamepad controls, save states, rotation and display scaling.
 ''')
@@ -72,7 +73,7 @@ Summary: WonderSwan / WonderSwan Color emulator
 License: LicenseRef-Gooswan
 URL: https://github.com/bubio/Gooswan
 BuildArch: x86_64
-Requires: {', '.join(RPM_RUNTIME)}
+Requires: {', '.join((*RPM_RUNTIME, 'ca-certificates'))}
 
 %description
 WonderSwan / WonderSwan Color emulator with keyboard and gamepad controls,
@@ -86,6 +87,7 @@ cp -a "{tree}/usr" "%{{buildroot}}/"
 
 %files
 /usr/bin/gooswan
+/usr/bin/gooswan-link
 /usr/share/applications/gooswan.desktop
 /usr/share/icons/hicolor/256x256/apps/gooswan.png
 %doc /usr/share/doc/gooswan

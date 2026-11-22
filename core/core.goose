@@ -21,6 +21,7 @@ import ppu;
 import rtc;
 import apu;
 import state;
+import serial;
 
 let SCREEN_W:     i64 = 224;
 let SCREEN_H:     i64 = 144;

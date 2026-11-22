@@ -37,6 +37,7 @@ fn front_toggle_fullscreen() {
     } else { front_notify("Could not change fullscreen mode"); }
 }
 fn front_open_settings() {
+    link_dialog = false;
     front_settings = true; front_capture = -1;
     front_about = false; front_recent = false; front_settings_reopen = true;
 }

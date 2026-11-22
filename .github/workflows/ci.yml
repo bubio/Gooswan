@@ -74,6 +74,11 @@ jobs:
         with:
           python-version: '3.12'
 
+      - uses: actions/setup-go@v7
+        with:
+          go-version: '1.27.4'
+          cache-dependency-path: app/link/go.sum
+
       - name: Test release packaging contracts
         run: python tests/package_test.py
 

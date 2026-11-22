@@ -10,12 +10,13 @@ SST=./tools/sst
 # Windows' C runtime ends printed lines with \r\n; strip the \r so the
 # parsing below is the same on every platform. Keeps sst's exit status.
 sst() { _out=$("$SST" "$@") || return; printf '%s\n' "$_out" | tr -d '\r'; }
-for t in cpu_test ppu_test apu_test eeprom_test state_test; do
+for t in cpu_test ppu_test apu_test eeprom_test state_test serial_test; do
     out=$(sst $t)
     echo "$out"
     echo "$out" | grep -q ", 0 failed" || { echo "FAIL: $t" >&2; exit 1; }
 done
 ./app/gooswan --self-test
+./app/gooswan --link-self-test
 ./tools/audio_test
 sh ./tests/cli_check.sh
 total=$(sst tests/data/*.json | awk -F'[= ]' '/total=/{t+=$3; p+=$5} END {print p"/"t}')

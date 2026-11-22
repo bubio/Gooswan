@@ -20,7 +20,7 @@ var front_pre_mute:        i64  = 100;
 // Measure the same rows that are drawn, in logical pixels using the active font.
 enum FrontAction {
     None, PickRom, LoadRom, ClearHistory, SaveState, LoadState, OpenSettings,
-    OpenAbout, Quit, TogglePause, Reset, StartBios, ToggleFullscreen,
+    OpenAbout, OpenLink, Quit, TogglePause, Reset, StartBios, ToggleFullscreen,
     OpenBiosDirectory, CloseSettings, OpenRecent,
     Scale { value: i64 }, Rotate { value: i64 }, Filter { linear: bool },
 }
@@ -130,11 +130,11 @@ fn front_prepare_dialog(name: const u8[:], bounds: ui::Rect, reopen: bool) {
     if reopen { ui::window_set_bounds(front_ui, name, bounds); ui::window_set_focus(front_ui, name); }
 }
 fn front_open_about() {
-    front_settings = false; front_capture = -1; front_recent = false;
+    front_settings = false; front_capture = -1; front_recent = false; link_dialog = false;
     front_about = true; front_about_reopen = true;
 }
 fn front_open_recent() {
-    front_settings = false; front_capture = -1; front_about = false;
+    front_settings = false; front_capture = -1; front_about = false; link_dialog = false;
     front_recent = true; front_recent_reopen = true;
 }
 fn front_draw_ui() {
@@ -153,19 +153,20 @@ fn front_draw_ui() {
             FrontMenuItem { "Open ROM...", "Ctrl+O", FrontAction.PickRom, !front_dialog },
             FrontMenuItem { "Open Recent...", "", FrontAction.OpenRecent, settings.recent_count > 0 },
             FrontMenuItem { "", "", FrontAction.None, false },
-            FrontMenuItem { "Save State", "Ctrl+S", FrontAction.SaveState, front_path.len > 0 },
-            FrontMenuItem { "Load State", "Ctrl+L", FrontAction.LoadState, front_path.len > 0 },
+            FrontMenuItem { "Save State", "Ctrl+S", FrontAction.SaveState, front_path.len > 0 && !link_active() },
+            FrontMenuItem { "Load State", "Ctrl+L", FrontAction.LoadState, front_path.len > 0 && !link_active() },
             FrontMenuItem { "", "", FrontAction.None, false },
             FrontMenuItem { "Settings...", "Ctrl+,", FrontAction.OpenSettings, true },
             FrontMenuItem { "About Gooswan...", "", FrontAction.OpenAbout, true },
             FrontMenuItem { "", "", FrontAction.None, false },
             FrontMenuItem { "Quit", "Ctrl+Q", FrontAction.Quit, true },
         ];
-        let emu_items: FrontMenuItem[4] = [
+        let emu_items: FrontMenuItem[5] = [
             FrontMenuItem { if front_paused { "Resume" } else { "Pause" }, "Ctrl+P", FrontAction.TogglePause, front_loaded },
             FrontMenuItem { "Reset", "Ctrl+R", FrontAction.Reset, front_loaded },
             FrontMenuItem { "", "", FrontAction.None, false },
             FrontMenuItem { "BIOS Settings...", "", FrontAction.StartBios, true },
+            FrontMenuItem { "Link Play...", "", FrontAction.OpenLink, true },
         ];
         let view_items: FrontMenuItem[13] = [
             FrontMenuItem { "Scale 1x", "", FrontAction.Scale { value: 1 }, true, settings.scale == 1 },
@@ -197,10 +198,11 @@ fn front_draw_ui() {
     front_menu_blocks_input = front_menu_blocks_input || front_menu_open;
     front_draw_status(ww, hh);
     ui::set_style(c, saved);
-    if !front_loaded && !front_settings && !front_about && !front_recent { front_draw_welcome(ww, hh); }
+    if !front_loaded && !front_settings && !front_about && !front_recent && !link_dialog { front_draw_welcome(ww, hh); }
     if front_settings { front_draw_settings(ww, hh); }
     if front_recent { front_draw_recent(ww, hh); }
     if front_about { front_draw_about(ww, hh); }
+    if link_dialog { link_draw_dialog(ww, hh); }
     // The Settings X button can request recovery while this frame is drawn.
     // Leave that request for the next complete frame instead of discarding it.
     if recovering_input { front_ui_recover_input = false; }
@@ -393,6 +395,7 @@ fn front_do_action() {
         LoadState => front_load_state(),
         OpenSettings => front_open_settings(),
         OpenAbout => front_open_about(),
+        OpenLink => link_open_dialog(),
         Quit => { front_running = false; },
         TogglePause => front_toggle_pause(),
         Reset => front_reset(),

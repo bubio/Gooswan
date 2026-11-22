@@ -69,7 +69,7 @@ python3 tools/diff_swanium.py /path/to/game.wsc 600
 
 The timing model estimates instruction costs. WSTimingTest verifies the measured loops. [WSTimingTest source and measurement notes](https://github.com/FluBBaOfWard/WSTimingTest)
 
-The mono TX-ready interrupt is level-triggered while serial and the send IRQ are enabled. This covers WSTimingTest's HLT and external interrupt loops. Hardware IRQ entry is charged 40 cycles and HLT 12 in the fitted model. Serial byte transfer and baud timing remain unmodelled.
+The mono TX-ready interrupt is level-triggered while serial and the send IRQ are enabled. This covers WSTimingTest's HLT and external interrupt loops. Hardware IRQ entry is charged 40 cycles and HLT 12 in the fitted model. An attached link cable enables clocked byte transfer, receive interrupts and overrun handling. The serial self-test covers both baud rates, timestamp wraparound, and receive status and interrupts. The worker tests cover room negotiation and binary records using a local WebSocket server. CI also starts the worker from relocated packages.
 
 ## Audio checks
 

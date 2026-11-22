@@ -118,6 +118,7 @@ struct MachineState {
 }
 
 fn save_state_bytes() -> u8[>..] {
+    if serial_attached { return []; }
     var snap: MachineState[1] = [default<MachineState>(); 1];
     snap[0].mem = mem;
     snap[0].r = r;
@@ -237,7 +238,7 @@ fn save_state_bytes() -> u8[>..] {
 
 // Validate the entire container before changing any live machine state.
 fn load_state_bytes(data: const u8[:]) -> bool {
-    if data.len < 33 || data.len > 2000000 { return false; }
+    if serial_attached || data.len < 33 || data.len > 2000000 { return false; }
     let header, header_ok = from_bytes<u64[>..]>(data[..33]);
     if !header_ok || header.len != 4 { return false; }
     if header[0] != STATE_MAGIC || header[1] != STATE_VERSION { return false; }

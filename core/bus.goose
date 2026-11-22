@@ -1,6 +1,5 @@
 // Gooswan bus/system: WonderSwan memory map, I/O ports, timers,
-// interrupt latching and delivery, the serial
-// TX-ready level, and machine boot + one frame (ws_boot/ws_frame).
+// interrupt latching and delivery, and machine boot and frame execution.
 namespace core;
 
 // ---- WonderSwan machine mode (selected by the "ws" CLI argument) ----
@@ -95,7 +94,8 @@ fn port_rd(p: i64) -> i64 {
         if model_mono { var bit: i64 = 7; while bit > 0 && ((int_cause >> bit) & 1) == 0 { bit -= 1; } v |= bit; }
         return v;
     }
-    if p == SERIAL_DATA { return 0; }  // receive buffer, empty
+    if p == SERIAL_DATA { return if serial_attached { serial_read() } else { 0 }; }
+    if p == SERIAL_STATUS && serial_attached { return serial_status(); }
     if p == INT_CAUSE { refresh_serial(); return int_cause; }  // (the TX-ready level re-asserts on read)
     if p == KEYPAD {  // selector echoed back, selected scan groups OR-ed into the low nibble
         var v: i64 = key_select;
@@ -170,8 +170,8 @@ fn port_wr(p: i64, v: i64) {
     if p == SND_VOICE_SAMPLE { voice_feed(v); }  // voice data latch: feeds the reconstruction low-pass while voice mode is on
     if !model_mono && p >= HV_DIRECT_L_LO && p <= HV_DIRECT_R_HI { io_ports[HV_DATA] = 0; }  // HyperVoice direct write clears the data latch (colour only)
     if !model_mono && p == HV_DATA { io_ports[HV_DIRECT_L_LO] = 0; io_ports[HV_DIRECT_L_HI] = 0; io_ports[HV_DIRECT_R_LO] = 0; io_ports[HV_DIRECT_R_HI] = 0; }  // HyperVoice data write clears the direct words
-    if p == SERIAL_STATUS { io_ports[SERIAL_STATUS] = (v & 0xC4) as! u8; }  // write side (SERIAL_CTRL): only enable/speed/overrun bits exist
-    if p == SERIAL_DATA || p == INT_ENABLE || p == SERIAL_STATUS { refresh_serial(); }  // serial TX-ready level feeds INT_CAUSE bit 0
+    if p == SERIAL_DATA || p == SERIAL_STATUS { serial_write(p, v); }
+    if p == INT_ENABLE { refresh_serial(); }
     if p == GDMA_CTRL && (v & 0x80) != 0 { run_gdma(); }  // GDMA trigger: synchronous burst on the enable write
     if p == SDMA_CTRL { sdma_tick(0); }  // start (or, with a zero length, self-clear ENABLE) right away
     if p == IEEP_CTRL { ie_control(v); }  // IEEPROM control: execute the latched command (IEEP_CMD)
@@ -183,7 +183,9 @@ fn port_wr(p: i64, v: i64) {
         sys_ctrl1 = (sys_ctrl1 & 0x87) | (v & 0x0C);
     }
     else if p == KEYPAD { key_select = v & 0x70; }  // only select bits 4-6 exist
-    else if p == INT_CAUSE_CLEAR { int_cause = int_cause & ~v; }
+    else if p == INT_CAUSE_CLEAR {
+        int_cause &= ~v;
+    }
     else if p == RTC_CMD { if rtc_present { rtc_write_command(v); } }
     else if p == RTC_DATA { if rtc_present { rtc_write_data(v); } }
     else if p >= BANK16_RAM && p <= BANK16_ROM1 + 1 && mapper_2003 {
@@ -221,25 +223,6 @@ fn tick_vbl() {
         if ((io_ports[INT_ENABLE] as i64) & 0x20) != 0 { int_cause |= 0x20; }
         if (ctrl & 8) != 0 { set_vbl_count(io_ports[VBLANK_TIMER_RELOAD] | ((io_ports[VBLANK_TIMER_RELOAD + 1] as i64) << 8)); } else { set_vbl_count(0); }
     } else { set_vbl_count(cnt - 1); }
-}
-
-// The serial TX-ready cause is a level, not a baud timer: with the
-// serial port enabled (SERIAL_CTRL bit 7) and the SERIAL_SEND
-// interrupt enabled, INT_CAUSE bit 0 reads as permanently pending
-// (the UART is always ready to send). It is re-evaluated on writes
-// to the serial data/enable/ctrl ports and cleared only via
-// INT_CAUSE_CLEAR, matching Swanium's refresh model — and it is
-// exactly what WSTimingTest's HLT and IRQ loops measure: their
-// handlers never acknowledge the cause, yet the IRQ is taken (and HLT
-// wakes) on every iteration once the serial is on
-// (docs/testing.md#cpu-timing).
-fn refresh_serial() {
-    // The instant TX-ready latch is a mono-machine behaviour (Swanium
-    // gates it the same way). On colour carts it must NOT fire:
-    // WSHWTest's IO-register test pattern-writes INT_ENABLE = 0xFF
-    // with the serial left enabled, and an instantly-pending
-    // non-acknowledged IRQ would livelock that test on the spot.
-    if model_mono && ((io_ports[INT_ENABLE] as i64) & 1) != 0 && ((io_ports[SERIAL_STATUS] as i64) & 0x80) != 0 { int_cause |= 0x01; }
 }
 
 fn ws_line_events() {
@@ -315,6 +298,7 @@ fn ws_boot() {
     bk_ram_hi = 0xFF; bk_rom0_hi = 0xFF; bk_rom1_hi = 0xFF;
     mapper_2003 = rom.len > 16 && (rom[rom.len - 3] as i64) == 1;
     rom_span = 1; while rom_span < rom.len { rom_span *= 2; }
+    serial_reset();
     int_cause = 0; key_select = 0; keys_state = 0; cpu_halted = false; sys_ctrl1 = 0x02;
     irq_inhibit = 0; trap_inhibit = 0; irq_ret_override = -1;
     ea_register_changes = 0; xfer_flag = false;
@@ -340,6 +324,7 @@ fn ws_frame() {
     rtc_tick(40704);
     var spent: i64 = ws_frame_carry;  // overshoot of the last frame's final instruction (Swanium's cycle_carry)
     while spent < 40704 {
+        if serial_attached { serial_tick(); refresh_serial(); }
         // Swanium's order: IRQ acceptance (unless held off by the previous
         // instruction), one instruction, then the TF trap for it.
         let inhibited: bool = irq_inhibit > 0;
