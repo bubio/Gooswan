@@ -20,10 +20,10 @@ The fetchers keep data under `tests/roms/` and `tests/data/`. The build runs cor
 | SingleStepTests 8086 | 634,406 / 646,000 | CI. Remaining differences are undefined flags after DIV/IDIV/IMUL and AAM with base zero. |
 | WSHWTest Test All | Pass | CI. Includes hardware I/O, interrupt, timer and sound tests. |
 | Framebuffer hashes | 3 / 3 | CI. Two WSHWTest screens and one WSTimingTest screen. |
-| WSTimingTest | 400 / 407 | CI. Seven known timing differences listed below. |
+| WSTimingTest | 407 / 407 | CI. All 29 pages run against the pinned ROM. |
 | WSCpuTest v0.7.1 Test All | Pass | Recorded developer baseline for the V30MZ profile. |
 | SingleStepTests V20 native | 2,980,747 / 3,125,000 | Recorded developer baseline for the separate V20 profile. |
-| ws-test-suite | 22 / 22 | Recorded developer baseline for the ROMs and markers selected by the local harness. |
+| ws-test-suite | 21 / 22 | Optional local run. `mono/sound/quirks.ws` fails one marker on both the previous build and the CPU timing update. |
 
 ## Focused checks
 
@@ -58,16 +58,16 @@ cargo build --release --manifest-path tools/swprobe/Cargo.toml
 python3 tools/diff_swanium.py /path/to/game.wsc 600
 ```
 
-## Known timing differences
+## CPU timing
 
-[`core/cpu_timing.goose`](../core/cpu_timing.goose) estimates V30MZ instruction cycles from WSTimingTest measurements. The model uses 256 cycles per scanline and 159 scanlines per frame. It accounts for addressing forms, repeat counts and taken branches. WSTimingTest measures loops using the HBlank timer, so even small per-iteration differences can change the final count.
+[`core/cpu_timing.goose`](../core/cpu_timing.goose) models 256 cycles per scanline and 159 scanlines per frame. It estimates instruction timing using addressing forms, repeat counts and taken branches. WSTimingTest measures loops with the HBlank timer, so a counter read near a scanline boundary can change the result.
 
-| Case | Observed difference |
-| --- | --- |
-| AAA and AAS | 3 extra scanlines each. The adjust depends on operand values across iterations. |
-| EA04 | 4 fewer scanlines. The test changes the pointer on each iteration. |
-| TRIPLE_JP | 4 extra scanlines in the chained-branch case. |
-| RETF with immediate and D2/D3 shifts by CL | 1 fewer scanline each. |
+- AAA/AAS use nine clocks. Shifts and rotates use the operand form to determine their cost, including the CL and immediate forms with a masked count of zero. [NEC V30MZ Hardware User's Manual, Appendix A](https://www.ardent-tool.com/CPU/docs/NEC/V20-V30/v30mz.pdf)
+- A single-register effective address can incur a one-cycle dependency when the preceding instruction changes that register. The fitted two-register cost already accounts for the overlap observed in WSTimingTest. LEA does not pay the dependency.
+- A short backward conditional branch keeps its one-cycle prefetch saving when another transfer occurred in the sequence. This covers the chained-branch case.
+- The HBlank counter reflects any scanline boundary crossed before the IN bus sample. This makes the RETF immediate case report its last scanline.
+
+The timing model estimates instruction costs. WSTimingTest verifies the measured loops. [WSTimingTest source and measurement notes](https://github.com/FluBBaOfWard/WSTimingTest)
 
 The mono TX-ready interrupt is level-triggered while serial and the send IRQ are enabled. This covers WSTimingTest's HLT and external interrupt loops. Hardware IRQ entry is charged 40 cycles and HLT 12 in the fitted model. Serial byte transfer and baud timing remain unmodelled.
 

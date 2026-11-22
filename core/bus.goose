@@ -75,8 +75,16 @@ fn rom1_bank() -> i64 { if mapper_2003 { return bk_rom1 | (bk_rom1_hi << 8); } r
 // bank registers) are answered from that state; everything else reads
 // the stored byte through the SPHINX mask for the current mode.
 fn port_rd(p: i64) -> i64 {
-    if ws_mode && sweep_prepaid == 0 && (dbg_op == 0xE4 || dbg_op == 0xE5 || dbg_op == 0xEC || dbg_op == 0xED) { var pre: i64 = 2; if dbg_op == 0xE4 { pre = 4; } else if dbg_op == 0xE5 { pre = 5; } sweep_advance(pre); sweep_prepaid += pre; }  // IN: sweep runs until the sample point (once per instruction)
-    if p == LCD_LINE { return (ws_cycles % 40704) / 256; }  // current scanline (159 lines x 256 cycles)
+    let sample = match dbg_op { 0xE4 => 4, 0xE5 => 5, 0xEC, 0xED => 2, _ => 0 };
+    if ws_mode && sample > 0 {
+        if sweep_prepaid == 0 { sweep_advance(sample); sweep_prepaid = sample; }
+        // Timer counters are sampled on the I/O bus inside IN. A scanline
+        // boundary crossed before that point must already have clocked them.
+        if cyc_in_exec && p >= HBLANK_TIMER_COUNTER && p <= VBLANK_TIMER_COUNTER + 1 {
+            ws_scanline_events(ws_cycles + sample);
+        }
+    }
+    if p == LCD_LINE { return (ws_cycles % FRAME_CYCLES) / 256; }
     if p == SYSTEM_CTRL1 { return sys_ctrl1; }  // (drives the SPHINX flag variants in test ROMs)
     if p == SND_OUTPUT_CTRL { return (io_ports[SND_OUTPUT_CTRL] as i64) & 0x0F; }  // only the low 4 bits exist (bit 7 is a status bit, unread here)
     if p >= SND_CH_OUT_R && p <= SND_CH_OUT_LR + 1 { return apu_out_port(p); }  // current mixer levels
@@ -224,7 +232,7 @@ fn tick_vbl() {
 // exactly what WSTimingTest's HLT and IRQ loops measure: their
 // handlers never acknowledge the cause, yet the IRQ is taken (and HLT
 // wakes) on every iteration once the serial is on
-// (docs/testing.md#known-timing-differences).
+// (docs/testing.md#cpu-timing).
 fn refresh_serial() {
     // The instant TX-ready latch is a mono-machine behaviour (Swanium
     // gates it the same way). On colour carts it must NOT fire:
@@ -234,15 +242,16 @@ fn refresh_serial() {
     if model_mono && ((io_ports[INT_ENABLE] as i64) & 1) != 0 && ((io_ports[SERIAL_STATUS] as i64) & 0x80) != 0 { int_cause |= 0x01; }
 }
 
-// Catch the APU / DMA up to ws_cycles and run the per-scanline events
-// for every line boundary crossed since the last call: HBL timer,
-// VBL at line 144, the line-compare IRQ, sprite latching and rendering
-// of the line that just completed.
 fn ws_line_events() {
-    let apu_dc: i64 = ws_cycles - last_tick;
-    apu_tick(apu_dc);
+    apu_tick(ws_cycles - last_tick);
     last_tick = ws_cycles;
-    let line: i64 = (ws_cycles % 40704) / 256;
+    ws_scanline_events(ws_cycles);
+}
+
+// The sample point of an IN may cross a scanline boundary before the
+// instruction retires. last_line prevents clocking that boundary twice.
+fn ws_scanline_events(cycles: i64) {
+    let line: i64 = (cycles % FRAME_CYCLES) / 256;
     while last_line != line {
         last_line += 1; if last_line >= 159 { last_line = 0; }
         tick_hbl();
@@ -308,6 +317,7 @@ fn ws_boot() {
     rom_span = 1; while rom_span < rom.len { rom_span *= 2; }
     int_cause = 0; key_select = 0; keys_state = 0; cpu_halted = false; sys_ctrl1 = 0x02;
     irq_inhibit = 0; trap_inhibit = 0; irq_ret_override = -1;
+    ea_register_changes = 0; xfer_flag = false;
     ws_cycles = 0; last_line = 0; lfsr = 0; noise_counter = 0; last_tick = 0; init_cyc(); init_io_masks();
     for i in 8 { r[i] = 0; }
     for i in 4 { seg[i] = 0; }
@@ -338,20 +348,24 @@ fn ws_frame() {
         // ws_deliver_int wakes on any latched cause. No test pins which
         // of the two is right for a cause whose enable was since cleared.
         if inhibited { if (int_cause & io_ports[INT_ENABLE]) != 0 { cpu_halted = false; } }
-        else if ws_deliver_int() { ws_cycles += 40; spent += 40; }  // hardware IRQ entry = 40 (fault entry is 44; the 4-cycle difference is what ExIrq measures)
+        else if ws_deliver_int() { ea_register_changes = 0; ws_cycles += 40; spent += 40; }  // hardware IRQ entry = 40 (fault entry is 44; the 4-cycle difference is what ExIrq measures)
         if !cpu_halted {
-            let pre_cx: i64 = r[1];
+            let regs_before = r;
             if dbg_ring_on { dbg_ring[dbg_ring_pos] = ((seg[1] as i64) << 24) | ((ip as i64) << 8) | (rd8(phys(seg[1], ip))); dbg_ring_pos = (dbg_ring_pos + 1) & 1023; }
             fault_chg = 0; cyc_in_exec = true; irq_ret_override = -1;
             let okc: bool = exec_one(); cyc_in_exec = false;
             if !okc { ws_unsupported = true; return; }
             ws_total += 1;
-            let c: i64 = est_cycles(pre_cx) + gdma_stall;
+            let c: i64 = est_cycles(regs_before[1]) + gdma_stall;
+            ea_register_changes = (if r[3] != regs_before[3] { 1 } else { 0 })
+                | (if r[5] != regs_before[5] { 2 } else { 0 })
+                | (if r[6] != regs_before[6] { 4 } else { 0 })
+                | (if r[7] != regs_before[7] { 8 } else { 0 });
             gdma_stall = 0;
             ws_cycles += c; spent += c;
             if c >= 256 && rep_prefix != 0 && ((dbg_op >= 0xA4 && dbg_op <= 0xAF) || (dbg_op >= 0x6C && dbg_op <= 0x6F)) { irq_ret_override = dbg_ip; }
             if trap_inhibit > 0 { trap_inhibit -= 1; }
-            else if (flags & F_TF) != 0 { do_int(1); ws_cycles += 33; spent += 33; }  // TF single-step trap (entry charge fitted from WSTimingTest's trap case)
+            else if (flags & F_TF) != 0 { ea_register_changes = 0; do_int(1); ws_cycles += 33; spent += 33; }  // TF single-step trap (entry charge fitted from WSTimingTest's trap case)
         } else { ws_cycles += 32; spent += 32; }
         ws_line_events();
     }

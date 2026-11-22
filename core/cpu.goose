@@ -83,7 +83,7 @@ fn decode_modrm() {
     let mod: i64 = m >> 6;
     d_reg = (m >> 3) & 7;
     let rm: i64 = m & 7;
-    d_rm = rm; d_valid = true;
+    d_rm = rm; d_mod = mod; d_valid = true;
     if mod == 3 { d_isreg = true; d_regidx = rm; d_off = 0; d_segbase = 0;
         if cpu_mz {
             // V30MZ quirk (WSCpuTest): with mod=3 the EA adder still runs,
@@ -213,7 +213,7 @@ fn cond(c: i64) -> bool {
 }
 fn disp8s() -> i64 { let b = fetch8(); let bi: i64 = b; if bi > 127 { bi - 256 } else { bi } }
 fn disp16s() -> i64 { let v = fetch16(); let vi: i64 = v; if vi > 32767 { vi - 65536 } else { vi } }
-fn rel_jump(d: i64) { ip = ((ip + d) & 0xFFFF) as! u16; dbg_head = ip; dbg_odd = ((ip as i64) & 1) != 0; dbg_disp = d; }
+fn rel_jump(d: i64) { ip = ((ip + d) & 0xFFFF) as! u16; dbg_odd = ((ip as i64) & 1) != 0; dbg_disp = d; }
 // Interrupt acceptance (after Swanium's cpu): an instruction that
 // sets IF (STI, POPF/IRET turning IF on) or loads SS (POP SS, MOV SS)
 // holds maskable IRQs off for one more instruction; POPF/IRET turning
@@ -252,7 +252,6 @@ fn shift_op(kind: i64, v: i64, count: i64, bits: i64) -> i64 {
     // On this CPU the flags behave as if latched from the final 1-bit step.
     var cnt: i64 = count;
     if cpu_mz { cnt = cnt & 0x1F; }  // V30MZ masks the count to 5 bits before shifting (WSCpuTest)
-    dbg_shift_cnt = cnt;
     if kind <= 3 && cpu_mz && cnt == 0 {
         // V30MZ (per WSCpuTest): a rotate whose count is a multiple of 32
         // leaves the operand and CF untouched but still recomputes OF.
@@ -725,7 +724,7 @@ fn exec_one() -> bool {
         op = fetch8();
     }
     dbg_op = op;
-    d_valid = false; dbg_taken = false; dbg_back = false; dbg_odd = false; dbg_shift_cnt = 0;
+    d_valid = false; dbg_taken = false; dbg_back = false; dbg_odd = false;
     // 8086 decoder aliases: 60-6F execute as Jcc (70-7F); C0/C1/C8/C9 as C2/C3/CA/CB.
     if !cpu_v20 {
         if op >= 0x60 && op <= 0x6F { op = op + 0x10; }

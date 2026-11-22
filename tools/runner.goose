@@ -42,13 +42,14 @@ fn run_ws(path: u8[:]) {
     // Menu-driven ROMs: remember the menu as it stands just before the A press;
     // once a test has run, coming back to that exact screen ends the run
     // (otherwise auto-dismiss would restart Test All forever).
-    var menu:      u8[1024] = [0; 1024];
-    var menun:     i64      = 0;
-    var left_menu: bool     = false;
-    var prev_fail: bool     = false;
-    var page_done: i64      = 0;
-    var page_hold: i64      = 0;
-    var fb_dump:   bool     = false;
+    var menu:             u8[1024] = [0; 1024];
+    var menun:            i64      = 0;
+    var left_menu:        bool     = false;
+    var returned_to_menu: bool     = false;
+    var prev_fail:        bool     = false;
+    var page_done:        i64      = 0;
+    var page_hold:        i64      = 0;
+    var fb_dump:          bool     = false;
     if argv2.len > 4 && (argv2[4] == "fb" || argv2[4] == "fbwav") { fb_dump = true; }
     var wav_dump: bool = false;
     if argv2.len > 4 && (argv2[4] == "wav" || argv2[4] == "fbwav") { wav_dump = true; aud_enabled = true; }
@@ -79,7 +80,14 @@ fn run_ws(path: u8[:]) {
         var at_menu: bool = menun == n;
         if at_menu { for i in n { if screen[i] != menu[i] { at_menu = false; } } }
         if menu_idx > 0 && frame == 29 + menu_idx * 4 { for i in n { menu[i] = screen[i]; } menun = n; }
-        if menu_idx > 0 && frame > 40 + menu_idx * 4 { if !at_menu { left_menu = true; } else if left_menu { print("back at the menu at frame ", frame, " after ", ws_total, " instructions"); done = true; } }
+        if menu_idx > 0 && frame > 40 + menu_idx * 4 {
+            if !at_menu { left_menu = true; }
+            else if left_menu {
+                print("back at the menu at frame ", frame, " after ", ws_total, " instructions");
+                returned_to_menu = true;
+                break;
+            }
+        }
         var same: bool = n == lastn;
         if same { for i in n { if screen[i] != last[i] { same = false; } } }
         if same { frozen += 1; } else { frozen = 0; for i in n { last[i] = screen[i]; } lastn = n; }
@@ -89,6 +97,17 @@ fn run_ws(path: u8[:]) {
         else if frozen >= 600 { print("screen frozen for 600 frames at frame ", frame, " after ", ws_total, " instructions (waiting for a key: end of Test All or a failure stop)"); done = true; }
         else if frame % 2000 == 0 { print("frame ", frame, " oks=", count_ok(screen, n)); write_stdout(screen[..n]); }
         frame += 1;
+    }
+    if returned_to_menu {
+        frame += 1;
+        // Text readback sees the new tilemap as soon as the ROM writes it.
+        // Give the scanline renderer a full frame to present that menu.
+        if fb_dump {
+            keys_state = 0;
+            ws_frame();
+            if ws_unsupported { print("unsupported opcode ", dbg_op, " while presenting the menu"); exit(1); }
+            frame += 1;
+        }
     }
     print("final screen (frame ", frame, ", ", ws_total, " instructions):");
     print("state: cs:ip=", seg[1], ":", ip, " ax=", r[0], " bx=", r[3], " cx=", r[1], " dx=", r[2], " sp=", r[4], " bp=", r[5], " si=", r[6], " di=", r[7], " flags=", flags, " halted=", cpu_halted, " line=", (ws_cycles % 40704) / 256, " cause=", int_cause, " enable=", io_ports[0xB2], " scr_area=", io_ports[0x07], " p60=", io_ports[0x60], " p01raw=", io_ports[0x01], " p01rd=", port_rd(1));

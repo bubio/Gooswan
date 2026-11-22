@@ -17,10 +17,12 @@ fn state_test() {
     io_ports[SND_NOISE] = 0x10; // continuation includes the active noise countdown
     for i in 16 { mem[i] = (i * 13) as! u8; }
     state_check("initial execution", run_frame(0)); audio_clear();
+    ea_register_changes = 4;
     let saved = save_state_bytes();
     for n in 3 { state_check("continued execution", run_frame(KEY_A)); }
     let expected = save_state_bytes(); let pcm = to_bytes(aud_buf[..]);
     state_check("restore accepted", load_state_bytes(saved));
+    state_check("address dependency history restored", ea_register_changes == 4);
     for n in 3 { state_check("restored execution", run_frame(KEY_A)); }
     state_check("entire machine continuation matches", save_state_bytes() == expected);
     state_check("audio continuation matches", to_bytes(aud_buf[..]) == pcm);

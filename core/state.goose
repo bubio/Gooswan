@@ -13,11 +13,11 @@ struct MachineState {
     flags:                u16,
     dbg_taken:            bool,
     dbg_back:             bool,
-    dbg_head:             i64,
+    dbg_head:             i64, // v2 slot: legacy nonnegative branch target or negative EA history
     xfer_flag:            bool,
     dbg_odd:              bool,
     dbg_disp:             i64,
-    dbg_shift_cnt:        i64,
+    dbg_shift_cnt:        i64, // reserved v2 slot for the former shift timing estimate
     fault_chg:            i64,
     fault_base:           i64,
     cyc_in_exec:          bool,
@@ -126,11 +126,11 @@ fn save_state_bytes() -> u8[>..] {
     snap[0].flags = flags;
     snap[0].dbg_taken = dbg_taken;
     snap[0].dbg_back = dbg_back;
-    snap[0].dbg_head = dbg_head;
+    snap[0].dbg_head = -1 - ea_register_changes;
     snap[0].xfer_flag = xfer_flag;
     snap[0].dbg_odd = dbg_odd;
     snap[0].dbg_disp = dbg_disp;
-    snap[0].dbg_shift_cnt = dbg_shift_cnt;
+    snap[0].dbg_shift_cnt = 0;
     snap[0].fault_chg = fault_chg;
     snap[0].fault_base = fault_base;
     snap[0].cyc_in_exec = cyc_in_exec;
@@ -255,11 +255,11 @@ fn load_state_bytes(data: const u8[:]) -> bool {
     flags = snap[0].flags;
     dbg_taken = snap[0].dbg_taken;
     dbg_back = snap[0].dbg_back;
-    dbg_head = snap[0].dbg_head;
+    // Older v2 states stored a branch target here and have no EA history.
+    ea_register_changes = if snap[0].dbg_head >= 0 { 0 } else { (-(snap[0].dbg_head + 1)) & 15 };
     xfer_flag = snap[0].xfer_flag;
     dbg_odd = snap[0].dbg_odd;
     dbg_disp = snap[0].dbg_disp;
-    dbg_shift_cnt = snap[0].dbg_shift_cnt;
     fault_chg = snap[0].fault_chg;
     fault_base = snap[0].fault_base;
     cyc_in_exec = snap[0].cyc_in_exec;

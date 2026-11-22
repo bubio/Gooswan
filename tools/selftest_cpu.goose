@@ -53,6 +53,26 @@ fn cpu_test() {
     cpu_check("in ax,dx ok", if exec_one() { 1 } else { 0 }, 1);
     cpu_check("in ax,dx value", r[0], (port_rd(0x00) << 8) | port_rd(0xFF));
 
+    // IN AX samples both bytes on the same side of the HBlank edge.
+    // The counter borrows across bytes so a split sample cannot pass.
+    for crossing in 2 {
+        cpu_reset(false);
+        cpu_code([0xE5, 0xA8]);  // IN AX,HBlank counter
+        ws_cycles = 250 + crossing;
+        last_tick = ws_cycles;
+        last_line = 0;
+        set_hbl_count(0x100);
+        io_ports[TIMER_CTRL] = 1;
+        cyc_in_exec = true;
+        let ok = exec_one();
+        cyc_in_exec = false;
+        cpu_check("HBlank IN executes", if ok { 1 } else { 0 }, 1);
+        cpu_check("HBlank IN samples inside instruction", r[0], 0x100 - crossing);
+        ws_cycles += 7;
+        ws_line_events();
+        cpu_check("HBlank boundary counted once", hbl_count(), 0xFF);
+    }
+
     // GDMA writes go through the bus: a mono machine has 16 KB of WRAM,
     // so a destination above 0x4000 is dropped; colour lands it.
     for pass in 2 {

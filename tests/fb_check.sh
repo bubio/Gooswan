@@ -15,9 +15,8 @@ check() {
         fail=1
     fi
 }
-# m1 stops the first time Test All returns to the menu (tools/runner.goose),
-# so the golden is the menu screen after one complete, failure-free pass.
-check tests/roms/WSHWTest.wsc m1 -341173188216746214
+# m1 captures a full rendered frame after Test All returns to the menu.
+check tests/roms/WSHWTest.wsc m1 -295421874257209499
 check tests/roms/WSHWTest.wsc m7 -8074856431574525435
 check tests/roms/WSTimingTest.ws pg0 -7186274187880256422
 rm -f framebuffer.ppm

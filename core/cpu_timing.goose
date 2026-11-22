@@ -1,30 +1,30 @@
-// V30MZ instruction cycle estimates fitted against WSTimingTest.
+// V30MZ instruction cycle estimates fitted against WSTimingTest and NEC's clock table.
 namespace core;
 
-var cyc_tab:       i64[256] = [0; 256]; // per-opcode cycle estimates for the WS timing model (fitted against WSTimingTest)
-var dbg_taken:     bool     = false; // last branch outcome, for the cycle estimator
-var dbg_back:      bool     = false; // last branch jumped backward
-var dbg_head:      i64      = 0; // target offset of the last taken relative branch
-var xfer_flag:     bool     = false; // a control transfer already executed in the current loop iteration (the loop tail then costs +2: second prefetch flush)
-var dbg_odd:       bool     = false; // last relative branch landed on an odd offset
-var dbg_disp:      i64      = 0; // displacement of the last relative branch (loop span = -disp)
-var dbg_shift_cnt: i64      = 0; // effective shift count of the last shift/rotate
-var fault_chg:     i64      = 0; // interrupt-entry charge when the last instruction faulted (set in do_int)
-var fault_base:    i64      = 0; // partial-execution cost of the faulting instruction
-var cyc_in_exec:   bool     = false; // true while exec_one runs under the WS runner
-var d_valid:       bool     = false; // a ModRM was decoded for the current instruction
-var d_rm:          i64      = 0; // rm field of the current ModRM
+var cyc_tab:   i64[256] = [0; 256]; // per-opcode cycle estimates for the WS timing model (fitted against WSTimingTest)
+var dbg_taken: bool     = false;     // last branch outcome, for the cycle estimator
+var dbg_back:  bool     = false;     // last branch jumped backward
+// BX, BP, SI, DI changed by the preceding instruction.
+var ea_register_changes: i64  = 0;
+var xfer_flag:           bool = false; // a control transfer already executed in the current loop iteration (the loop tail then costs +2: second prefetch flush)
+var dbg_odd:             bool = false; // last relative branch landed on an odd offset
+var dbg_disp:            i64  = 0; // displacement of the last relative branch (loop span = -disp)
+var fault_chg:           i64  = 0; // interrupt-entry charge when the last instruction faulted (set in do_int)
+var fault_base:          i64  = 0; // partial-execution cost of the faulting instruction
+var cyc_in_exec:         bool = false; // true while exec_one runs under the WS runner
+var d_valid:             bool = false; // a ModRM was decoded for the current instruction
+var d_rm:                i64  = 0; // r/m field of the current ModR/M
+var d_mod:               i64  = 0;
 // Base cycle count per opcode byte for the WS timing model: the cost
 // of the register / simplest form. est_cycles adds the form-dependent
 // parts (memory operands, EA premiums, branch outcome, REP counts) on
-// top. All values are fitted to WSTimingTest's per-instruction pages
-// (docs/testing.md#known-timing-differences). Unmeasured opcodes default to 4.
+// top. See docs/testing.md#cpu-timing. Unmeasured opcodes default to 4.
 fn init_cyc() {
     for i in 256 { cyc_tab[i] = 4; }
     for i in 0x40 { cyc_tab[i] = 3; }  // ALU block; form splits applied in est_cycles
     cyc_tab[0x06] = 2; cyc_tab[0x0E] = 2; cyc_tab[0x16] = 2; cyc_tab[0x1E] = 2;
     cyc_tab[0x07] = 3; cyc_tab[0x17] = 3; cyc_tab[0x1F] = 3;
-    cyc_tab[0x0F] = 1; cyc_tab[0x27] = 10; cyc_tab[0x2F] = 11; cyc_tab[0x37] = 10; cyc_tab[0x3F] = 10;
+    cyc_tab[0x0F] = 1; cyc_tab[0x27] = 10; cyc_tab[0x2F] = 11; cyc_tab[0x37] = 9; cyc_tab[0x3F] = 9;
     for i in 0x10 { cyc_tab[0x40 + i] = 1; cyc_tab[0x50 + i] = 1; }
     for i in 8 { cyc_tab[0x58 + i] = 1; cyc_tab[0xB0 + i] = 1; cyc_tab[0xB8 + i] = 1; }
     cyc_tab[0x60] = 9; cyc_tab[0x61] = 9; cyc_tab[0x62] = 14;
@@ -55,10 +55,15 @@ fn init_cyc() {
 // only 1; most other ModRM ops pay 2.
 fn ea_premium(op: i64) -> i64 {
     if !d_valid || d_isreg { return 0; }
-    if d_rm > 3 { return 0; }
     if op >= 0xD8 && op <= 0xDF { return 0; }
-    if op == 0x8D || op == 0xC4 || op == 0xC5 || op == 0x8F { return 1; }
-    return 2;
+    if d_rm <= 3 {
+        return if op == 0x8D || op == 0xC4 || op == 0xC5 || op == 0x8F { 1 } else { 2 };
+    }
+    // A two-register address already carries its own address-generation cost.
+    // LEA and direct disp16 addresses do not pay a register dependency stall.
+    if op == 0x8D || (d_rm == 6 && d_mod == 0) { return 0; }
+    let base_bit = match d_rm { 4 => 4, 5 => 8, 6 => 2, _ => 1 };
+    return if (ea_register_changes & base_bit) != 0 { 1 } else { 0 };
 }
 
 fn cyc_alu(op: i64) -> i64 {
@@ -125,7 +130,7 @@ fn cyc_fault_base() -> i64 {
 
 // Cycles charged for the instruction exec_one just ran, from the
 // decode state it left behind (dbg_op, d_*, dbg_taken/back/odd,
-// dbg_shift_cnt, rep_prefix) and CX before it ran (pre_cx, for REP
+// rep_prefix) and CX before it ran (pre_cx, for REP
 // counts). A faulting instruction costs its partial work plus the
 // 44-cycle entry instead.
 //
@@ -158,7 +163,10 @@ fn est_cycles(pre_cx: i64) -> i64 {
         c = cyc_loop(op);
         if dbg_taken { sets_xfer = true; if dbg_back { is_tail = true; } }
     }
-    else if (op >= 0xC0 && op <= 0xC1) || (op >= 0xD0 && op <= 0xD3) { var sc: i64 = dbg_shift_cnt; if sc > 2 { sc = 2; } c = 1 + 2 * sc + ea_premium(op); }
+    else if (op >= 0xC0 && op <= 0xC1) || (op >= 0xD0 && op <= 0xD3) {
+        // CL and immediate forms decode a count even if it masks to zero.
+        c = (if op == 0xD0 || op == 0xD1 { 1 } else { 3 }) + (if d_isreg { 0 } else { 2 }) + ea_premium(op);
+    }
     else if op < 0x40 { c = cyc_alu(op); }
     else if op == 0x69 || op == 0x6B { if d_isreg { c = 3; } else { c = 4 + ea_premium(op); } }
     else if op == 0x84 || op == 0x85 { if d_isreg { c = 1; } else { c = 2 + ea_premium(op); } }
@@ -172,7 +180,13 @@ fn est_cycles(pre_cx: i64) -> i64 {
         if (op == 0xE9 || op == 0xEB) && dbg_odd { c += 1; }
         if op == 0xE8 || op == 0xE9 || op == 0xEA || op == 0xEB || op == 0x9A || op == 0xC2 || op == 0xC3 || op == 0xCA || op == 0xCB || op == 0xCF { sets_xfer = true; }
     }
-    if is_tail { if xfer_flag { c += 2; } else if op >= 0x70 && op <= 0x7F && 0 - dbg_disp <= 4 { c -= 1; } xfer_flag = false; }
+    if is_tail {
+        if xfer_flag { c += 2; }
+        // Short backward Jcc targets can reuse a prefetched word even
+        // when another transfer in the same sequence incurred a refill.
+        if op >= 0x70 && op <= 0x7F && dbg_disp >= -4 { c -= 1; }
+        xfer_flag = false;
+    }
     else if sets_xfer { xfer_flag = true; }
     return c;
 }

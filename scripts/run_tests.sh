@@ -1,8 +1,7 @@
 #!/bin/sh
 # The Gooswan regression battery: unit self-tests, the 8086
 # corpus baseline, WSHWTest Test All, the framebuffer goldens and
-# the full WSTimingTest harvest (400 passed / 7 failed is the
-# fitted baseline; the 7 are the documented deferred set).
+# every WSTimingTest case across all 29 pages.
 # Expects the corpus (scripts/fetch_corpus.sh) and the test ROMs
 # (scripts/fetch_test_roms.sh) to be in place, and tools/sst built.
 set -e
@@ -39,5 +38,5 @@ for n in $(seq 0 28); do
     fail=$((fail + f))
 done
 echo "WSTimingTest harvest: $pass passed, $fail failed"
-[ "$pass" = 400 ] && [ "$fail" = 7 ] || { echo "FAIL: timing baseline moved" >&2; exit 1; }
+[ "$pass" = 407 ] && [ "$fail" = 0 ] || { echo "FAIL: expected all 407 timing cases to pass" >&2; exit 1; }
 echo "all tests passed"
