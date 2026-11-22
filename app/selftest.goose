@@ -150,6 +150,7 @@ fn frontend_bios_eeprom_test() {
 // Native or headless UI integration smoke. Run with an isolated
 // GOOSWAN_CONFIG_DIR; screenshots stay in that directory.
 var front_smoke:                bool    = false;
+var front_smoke_ready_seen:     bool    = false;
 var front_smoke_link_fixture:   bool    = false;
 var front_smoke_tick:           i64     = 0;
 var front_smoke_wait:           f64     = 0.0;
@@ -212,15 +213,37 @@ fn front_smoke_before() {
         // Render the linked view without pairing to the live service.
         link_account_linked = true; link_show_pairing = false;
     }
-    if t == 89 && front_smoke_link_fixture { link_dialog = false; link_refresh_account(); }
-    if t == 90 { front_running = false; }
+    if t == 89 {
+        // The worker waits for its first command. This exercises the real
+        // Ready button without joining a live room.
+        let worker = hostlink_open("unused");
+        frontend_check("Ready test starts isolated worker", worker);
+        if !worker { return; }
+        link_stage = LinkStage.Seated;
+        link_peer = true;
+        link_open_dialog();
+    }
+    if t == 91 && link_stage == LinkStage.Seated {
+        gfx::inject_mouse(gfx::screen_size().x / 2.0, 136.0 * max(hostwindow_scale(), 1.0), gfx::MOUSE_LEFT, true);
+    }
+    if t == 92 && link_stage == LinkStage.Seated {
+        gfx::inject_mouse(gfx::screen_size().x / 2.0, 136.0 * max(hostwindow_scale(), 1.0), gfx::MOUSE_LEFT, false);
+    }
+    if t == 96 { frontend_check("Ready leaves the UI usable", gfx::misuse_count() == 0); front_running = false; }
 }
 fn front_smoke_after() {
     if !front_smoke { return; }
     let t = front_smoke_tick;
     let name = if t == 1 { "welcome" } else if t == 10 { "settings-rom" } else if t == 20 { "settings-input" } else if t == 30 { "main" } else if t == 36 { "file-menu" } else if t == 46 { "about" } else if t == 52 { "rotate-left" } else if t == 58 { "rotate-right" } else if t == 83 { "link-account" } else if t == 86 { "link-room" } else { "" };
     if name.len > 0 { frontend_check("screenshot", gfx::screenshot(config_path(str(name, ".png")))); }
-    if t == 90 {
+    if t >= 91 && link_ready && link_stage == LinkStage.Seated {
+        front_smoke_ready_seen = true;
+        // Stop before link_poll writes the Ready frame to the unseated worker.
+        hostlink_stop();
+        link_stage = LinkStage.Idle; link_peer = false; link_ready = false; link_dialog = false;
+    }
+    if t == 96 {
+        frontend_check("Ready keeps the room open", front_smoke_ready_seen);
         let result = str("ui_smoke: ", frontend_pass, " passed, ", frontend_fail, " failed");
         print(result);
         write_file(config_path("ui-smoke-result.txt"), result);

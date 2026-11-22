@@ -192,9 +192,11 @@ fn link_draw_dialog(ww: f32, hh: f32) {
             Joining => ui::label(c, "Joining room…", ui::TEXT_LEFT),
             Seated => {
                 ui::label(c, if !link_peer { "Waiting for another player…" } else if link_ready { "Waiting for the other player to be ready…" } else { "Select Ready to connect the cable." }, ui::TEXT_LEFT);
-                if !link_peer || link_ready { ui::widget_disable_begin(c); }
-                if ui::button_label(c, "Ready") { link_set_ready(); }
-                if !link_peer || link_ready { ui::widget_disable_end(c); }
+                let can_ready = link_peer && !link_ready;
+                if !can_ready { ui::widget_disable_begin(c); }
+                let clicked = ui::button_label(c, "Ready");
+                if !can_ready { ui::widget_disable_end(c); }
+                if can_ready && clicked { link_set_ready(); }
             },
             Linked => ui::label(c, "Cable connected", ui::TEXT_LEFT),
         }
