@@ -1,17 +1,24 @@
+# Build outputs and local toolchains
 .DS_Store
-
-# Goose build output
-.tools/
-.goose/
+/.goose/
+/.tools/
 *.o
+__pycache__/
 /gooswan
-/tools/sst
 /app/gooswan
+/app/gooswan.exe
+/tools/sst
+/tools/sst.exe
+/tools/audio_test
+/tools/audio_test.exe
+/tools/swprobe/target/
 
-# Test data (large corpora and ROMs are fetched, not committed)
-tests/data/
-tests/data-v20/
-tests/roms/
+# Test data and runner dumps
+/tests/data/
+/tests/data-v20/
+/tests/roms/
+/framebuffer.ppm
+/audio.wav
 *.ws
 *.wsc
 
@@ -21,15 +28,7 @@ tests/roms/
 *.iep
 *.rtc
 
-# Swanium differential probe build output
-tools/swprobe/target/
-
-# Desktop distribution artifacts
+# Distribution outputs
 /dist/
 /release-assets/
 /gooswan-*.zip
-__pycache__/
-/app/gooswan.exe
-/tools/sst.exe
-/tools/audio_test
-/tools/audio_test.exe

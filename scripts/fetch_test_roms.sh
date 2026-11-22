@@ -3,9 +3,7 @@
 # The sources are pinned by commit so CI builds exactly the ROMs
 # the framebuffer goldens in tests/fb_check.sh were recorded with.
 # Needs: curl, unzip, nasm (installed by the workflow).
-# WSCpuTest is deliberately not built here: its suites run for
-# minutes each, so CI skips them (the local tests/roms ROM is the
-# v0.7.1 release binary).
+# WSCpuTest is an optional developer check. See docs/testing.md.
 set -e
 cd "$(dirname "$0")/.."
 mkdir -p tests/roms

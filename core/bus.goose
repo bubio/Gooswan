@@ -224,7 +224,7 @@ fn tick_vbl() {
 // exactly what WSTimingTest's HLT and IRQ loops measure: their
 // handlers never acknowledge the cause, yet the IRQ is taken (and HLT
 // wakes) on every iteration once the serial is on
-// (docs/sessions/2026-11-07-serial-irq.md).
+// (docs/testing.md#known-timing-differences).
 fn refresh_serial() {
     // The instant TX-ready latch is a mono-machine behaviour (Swanium
     // gates it the same way). On colour carts it must NOT fire:

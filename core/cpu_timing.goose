@@ -18,8 +18,7 @@ var d_rm:          i64      = 0; // rm field of the current ModRM
 // of the register / simplest form. est_cycles adds the form-dependent
 // parts (memory operands, EA premiums, branch outcome, REP counts) on
 // top. All values are fitted to WSTimingTest's per-instruction pages
-// (docs/sessions/2026-11-07-wstimingtest-fit.md), not taken from a
-// datasheet; 4 is the default for opcodes no case measures.
+// (docs/testing.md#known-timing-differences). Unmeasured opcodes default to 4.
 fn init_cyc() {
     for i in 256 { cyc_tab[i] = 4; }
     for i in 0x40 { cyc_tab[i] = 3; }  // ALU block; form splits applied in est_cycles

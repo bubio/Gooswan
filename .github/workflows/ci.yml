@@ -17,6 +17,8 @@ on:
       - "README.md"
       - "docs/user-guide.md"
       - "docs/development.md"
+      - "docs/testing.md"
+      - "docs/packaging.md"
       - "tools/**"
       - "tests/**"
       - "scripts/**"
