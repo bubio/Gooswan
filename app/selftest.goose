@@ -39,6 +39,17 @@ fn frontend_test() {
     env("TMPDIR", tmp); if tmp.len == 0 { env("TEMP", tmp); } if tmp.len == 0 { tmp = str("/tmp"); }
     settings_dir = str(tmp, "/gooswan-settings-test-", clock_ns());
     frontend_check("create config directory", app_mkdirs(settings_dir));
+    link_open_dialog();
+    frontend_check("missing account link opens pairing", !link_account_linked && link_show_pairing);
+    frontend_check("save account fixture", write_file(link_token_path(), "fixture"));
+    link_open_dialog();
+    frontend_check("saved account opens room controls", link_account_linked && !link_show_pairing);
+    link_needs_relink = true;
+    link_open_dialog();
+    frontend_check("rejected account link reopens pairing", !link_account_linked && link_show_pairing);
+    link_needs_relink = false;
+    link_dialog = false;
+    delete_file(link_token_path());
     settings_writable = true;
     frontend_check("atomic save", settings_save());
     var data: u8[>..] = [];
@@ -139,6 +150,7 @@ fn frontend_bios_eeprom_test() {
 // Native or headless UI integration smoke. Run with an isolated
 // GOOSWAN_CONFIG_DIR; screenshots stay in that directory.
 var front_smoke:                bool    = false;
+var front_smoke_link_fixture:   bool    = false;
 var front_smoke_tick:           i64     = 0;
 var front_smoke_wait:           f64     = 0.0;
 var front_smoke_dialog:         bool    = false;
@@ -195,12 +207,18 @@ fn front_smoke_before() {
     if t == 76 && hostwindow_present() { front_toggle_fullscreen(); front_smoke_wait = gfx::time() + 1.5; }
     if t == 77 && hostwindow_present() { frontend_check("fullscreen exited", !hostwindow_is_fullscreen()); }
     if t == 80 && front_smoke_dialog { front_pick_rom(); front_smoke_dialog_waiting = true; }
+    if t == 82 && !file_exists(link_token_path()) { front_smoke_link_fixture = true; link_open_dialog(); frontend_check("Link Play opens account setup", link_dialog && link_show_pairing); }
+    if t == 85 && front_smoke_link_fixture {
+        // Render the linked view without pairing to the live service.
+        link_account_linked = true; link_show_pairing = false;
+    }
+    if t == 89 && front_smoke_link_fixture { link_dialog = false; link_refresh_account(); }
     if t == 90 { front_running = false; }
 }
 fn front_smoke_after() {
     if !front_smoke { return; }
     let t = front_smoke_tick;
-    let name = if t == 1 { "welcome" } else if t == 10 { "settings-rom" } else if t == 20 { "settings-input" } else if t == 30 { "main" } else if t == 36 { "file-menu" } else if t == 46 { "about" } else if t == 52 { "rotate-left" } else if t == 58 { "rotate-right" } else { "" };
+    let name = if t == 1 { "welcome" } else if t == 10 { "settings-rom" } else if t == 20 { "settings-input" } else if t == 30 { "main" } else if t == 36 { "file-menu" } else if t == 46 { "about" } else if t == 52 { "rotate-left" } else if t == 58 { "rotate-right" } else if t == 83 { "link-account" } else if t == 86 { "link-room" } else { "" };
     if name.len > 0 { frontend_check("screenshot", gfx::screenshot(config_path(str(name, ".png")))); }
     if t == 90 {
         let result = str("ui_smoke: ", frontend_pass, " passed, ", frontend_fail, " failed");

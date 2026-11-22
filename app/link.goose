@@ -7,18 +7,24 @@ extern fn hostlink_open_site(account: bool) -> bool;
 
 enum LinkStage { Idle, Pairing, Joining, Seated, Linked }
 var link_stage = LinkStage.Idle;
-var link_dialog:     bool    = false;
-var link_reopen:     bool    = false;
-var link_peer:       bool    = false;
-var link_ready:      bool    = false;
-var link_code:       u8[64]  = [0; 64];
-var link_code_len:   i64     = 0;
-var link_device:     u8[64]  = [0; 64];
-var link_device_len: i64     = 0;
-var link_message:    u8[>..] = [];
+var link_dialog:         bool    = false;
+var link_reopen:         bool    = false;
+var link_account_linked: bool    = false;
+var link_needs_relink:   bool    = false;
+var link_show_pairing:   bool    = false;
+var link_peer:           bool    = false;
+var link_ready:          bool    = false;
+var link_code:           u8[64]  = [0; 64];
+var link_code_len:       i64     = 0;
+var link_device:         u8[64]  = [0; 64];
+var link_device_len:     i64     = 0;
+var link_message:        u8[>..] = [];
 
 fn link_active() -> bool { return link_stage == LinkStage.Seated || link_stage == LinkStage.Linked; }
 fn link_token_path() -> u8[>..] { return config_path("swan-revival-token"); }
+fn link_refresh_account() {
+    link_account_linked = settings_dir.len > 0 && !link_needs_relink && file_exists(link_token_path());
+}
 
 fn link_end(message: const u8[:]) {
     let was_active = link_active();
@@ -54,7 +60,21 @@ fn link_poll() {
         if n == 0 { return; }
         if n < 0 { link_end("Swan Revival connection closed"); return; }
         if frame[0] == 'E' { link_end(frame[1..n]); return; }
-        if frame[0] == 'A' && link_stage == LinkStage.Pairing { link_end("Swan Revival account linked"); return; }
+        if frame[0] == 'L' && link_stage == LinkStage.Joining {
+            link_needs_relink = true;
+            link_refresh_account();
+            link_show_pairing = true;
+            link_end("Generate a new device code to link again.");
+            return;
+        }
+        if frame[0] == 'A' && link_stage == LinkStage.Pairing {
+            link_needs_relink = false;
+            link_refresh_account();
+            link_show_pairing = !link_account_linked;
+            if link_account_linked { link_end("Account linked. You can now join a room."); }
+            else { link_end("Could not find the saved account link."); }
+            return;
+        }
         if frame[0] == 'J' && link_stage == LinkStage.Joining {
             let path = str(front_path);
             // Power on with the cable present before the game reaches its link menu.
@@ -92,38 +112,81 @@ fn link_flush() {
 fn link_open_dialog() {
     front_settings = false; front_capture = -1; front_about = false; front_recent = false;
     link_dialog = true; link_reopen = true;
+    if link_stage == LinkStage.Idle {
+        link_refresh_account();
+        link_show_pairing = !link_account_linked;
+    }
 }
+fn link_site(account: bool) {
+    if !hostlink_open_site(account) {
+        link_message = str("Could not open the browser.");
+        front_notify(link_message);
+    }
+}
+
+fn link_draw_pairing() {
+    let c = front_ui;
+    ui::layout_row_dynamic(c, 25.0, 1);
+    if ui::button_label(c, "Open Swan Revival account page") { link_site(true); }
+    ui::layout_row_dynamic(c, 40.0, 1);
+    ui::label_wrap(c, "Sign in and generate a device code on the account page.");
+    ui::layout_row_dynamic(c, 22.0, 1);
+    ui::label(c, "One-time device code", ui::TEXT_LEFT);
+    ui::layout_row_dynamic(c, 26.0, 2);
+    ui::edit_string(c, ui::EDIT_FIELD, link_device[..], link_device_len, ui::FILTER_ASCII);
+    let empty = link_device_len == 0;
+    if empty { ui::widget_disable_begin(c); }
+    if ui::button_label(c, "Link account") && !empty {
+        link_begin(true, link_device[..link_device_len]);
+        for i in link_device_len { link_device[i] = 0; }
+        link_device_len = 0;
+    }
+    if empty { ui::widget_disable_end(c); }
+    if link_account_linked {
+        ui::layout_row_dynamic(c, 25.0, 1);
+        if ui::button_label(c, "Back to room") { link_show_pairing = false; link_message = []; }
+    }
+}
+
+fn link_draw_room() {
+    let c = front_ui;
+    ui::layout_row_dynamic(c, 25.0, 2);
+    if ui::button_label(c, "Open room lobby") { link_site(false); }
+    if ui::button_label(c, "Link another account") { link_show_pairing = true; link_message = []; }
+    ui::layout_row_dynamic(c, 22.0, 1);
+    ui::label(c, "Room ID", ui::TEXT_LEFT);
+    ui::layout_row_dynamic(c, 26.0, 2);
+    ui::edit_string(c, ui::EDIT_FIELD, link_code[..], link_code_len, ui::FILTER_ASCII);
+    let can_join = front_path.len > 0 && link_code_len > 0;
+    if !can_join { ui::widget_disable_begin(c); }
+    if ui::button_label(c, "Join room") && can_join { link_begin(false, link_code[..link_code_len]); }
+    if !can_join { ui::widget_disable_end(c); }
+    if front_path.len == 0 {
+        ui::layout_row_dynamic(c, 24.0, 1);
+        ui::label(c, "Open the game's ROM before joining.", ui::TEXT_LEFT);
+    }
+}
+
 fn link_draw_dialog(ww: f32, hh: f32) {
     let c = front_ui;
     let w = min(386.0, ww - 16.0);
-    let h = min(240.0, hh - front_chrome_height() - 12.0);
+    let h = min(290.0, hh - front_chrome_height() - 12.0);
     let bounds = ui::rect((ww - w) / 2.0, FRONT_MENU_HEIGHT + 6.0, w, h);
     front_prepare_dialog("Swan Revival Link Play", bounds, link_reopen);
     link_reopen = false;
     if ui::begin(c, "Swan Revival Link Play", bounds, front_content_window_flags(ui::WINDOW_BORDER | ui::WINDOW_TITLE | ui::WINDOW_MOVABLE | ui::WINDOW_CLOSABLE)) {
-        ui::layout_row_dynamic(c, 25.0, 2);
-        if ui::button_label(c, "Swan Revival account") { hostlink_open_site(true); }
-        if ui::button_label(c, "Open lobby") { hostlink_open_site(false); }
+        ui::layout_row_dynamic(c, 24.0, 1);
+        let account_status: const u8[:] = if link_needs_relink { "Account needs relinking" } else if link_account_linked { "Account linked" } else { "Account not linked" };
+        ui::label(c, account_status, ui::TEXT_LEFT);
         ui::layout_row_dynamic(c, 24.0, 1);
         match link_stage {
             Idle => {
-                ui::label(c, if front_path.len == 0 { "Open the room's game first" } else { "Room code" }, ui::TEXT_LEFT);
-                ui::layout_row_dynamic(c, 25.0, 2);
-                ui::edit_string(c, ui::EDIT_FIELD, link_code[..], link_code_len, ui::FILTER_ASCII);
-                if front_path.len == 0 { ui::widget_disable_begin(c); }
-                if ui::button_label(c, "Join") && front_path.len > 0 { link_begin(false, link_code[..link_code_len]); }
-                if front_path.len == 0 { ui::widget_disable_end(c); }
-                ui::layout_row_dynamic(c, 24.0, 1);
-                ui::label(c, "One-time device code", ui::TEXT_LEFT);
-                ui::layout_row_dynamic(c, 25.0, 2);
-                ui::edit_string(c, ui::EDIT_FIELD, link_device[..], link_device_len, ui::FILTER_ASCII);
-                if ui::button_label(c, "Link account") {
-                    link_begin(true, link_device[..link_device_len]);
-                    for i in link_device.len { link_device[i] = 0; }
-                    link_device_len = 0;
+                if link_show_pairing { link_draw_pairing(); }
+                else { link_draw_room(); }
+                if link_message.len > 0 {
+                    ui::layout_row_dynamic(c, 42.0, 1);
+                    ui::label_wrap(c, link_message);
                 }
-                ui::layout_row_dynamic(c, 24.0, 1);
-                ui::label(c, link_message, ui::TEXT_LEFT);
             },
             Pairing => ui::label(c, "Linking account…", ui::TEXT_LEFT),
             Joining => ui::label(c, "Joining room…", ui::TEXT_LEFT),

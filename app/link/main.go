@@ -21,6 +21,9 @@ import (
 
 const service = "https://wg.swanrevival.com"
 const maxFrame = 8192
+
+var errLinkRequired = errors.New("Link your Swan Revival account first")
+
 const roomAlphabet = "23456789ABCDEFGHJKMNPQRSTUVWXYZ"
 
 type frame struct {
@@ -106,8 +109,11 @@ type roomMessage struct {
 }
 
 func roomError(code string) error {
+	if code == "sign-in" {
+		return errLinkRequired
+	}
 	messages := map[string]string{
-		"no-room": "Room not found", "full": "Room is full", "sign-in": "Link your Swan Revival account again",
+		"no-room": "Room not found", "full": "Room is full",
 		"name": "Set a player name on Swan Revival", "kicked": "The host removed you from the room",
 		"closed": "The host closed the room", "limit": "Swan Revival room limit reached", "version": "Unsupported Swan Revival protocol version",
 	}
@@ -266,7 +272,7 @@ func run(in io.Reader, out io.Writer, tokenFile string) error {
 	}
 	token, err := os.ReadFile(tokenFile)
 	if err != nil || len(token) == 0 || len(token) > maxFrame {
-		return errors.New("Link your Swan Revival account first")
+		return errLinkRequired
 	}
 	return join(ctx, in, out, "wss://wg.swanrevival.com/room/"+code, strings.TrimSpace(string(token)))
 }
@@ -276,7 +282,11 @@ func main() {
 		os.Exit(2)
 	}
 	if err := run(os.Stdin, os.Stdout, os.Args[1]); err != nil {
-		_ = writeFrame(os.Stdout, 'E', []byte(err.Error()))
+		if errors.Is(err, errLinkRequired) {
+			_ = writeFrame(os.Stdout, 'L', nil)
+		} else {
+			_ = writeFrame(os.Stdout, 'E', []byte(err.Error()))
+		}
 		os.Exit(1)
 	}
 }
