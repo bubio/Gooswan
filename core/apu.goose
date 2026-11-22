@@ -47,18 +47,22 @@ fn apu_read_wave(ch: i64) {
     if (ch_idx[ch] & 1) == 0 { ch_sample[ch] = b & 0x0F; } else { ch_sample[ch] = (b >> 4) & 0x0F; }
 }
 
-fn apu_chan_advance(ch: i64, dc: i64) {
-    let period: i64 = 2048 - apu_pitch(ch);
-    var rem:   i64 = dc;
-    var first: i64 = ch_period[ch]; if first == 0 { first = 1; }
-    if rem < first { ch_period[ch] -= rem; return; }
-    rem -= first;
-    ch_idx[ch] = (ch_idx[ch] + 1) & 0x1F;
+fn apu_chan_advance(ch: i64, dc: i64, clock_lfsr: bool) {
+    let first = max(ch_period[ch], 1);
+    if dc < first { ch_period[ch] -= dc; return; }
+    let period = 2048 - apu_pitch(ch);
+    let rem = dc - first;
+    var advances = 1;
+    ch_period[ch] = period;
+    if rem > 0 {
+        advances += rem / period;
+        ch_period[ch] -= rem % period;
+    }
+    ch_idx[ch] = (ch_idx[ch] + advances) & 0x1F;
     apu_read_wave(ch);
-    if rem == 0 { ch_period[ch] = period; return; }
-    let extra: i64 = rem / period;
-    if extra != 0 { ch_idx[ch] = (ch_idx[ch] + extra) & 0x1F; apu_read_wave(ch); }
-    ch_period[ch] = period - (rem % period);
+    if clock_lfsr {
+        for step in advances { step_lfsr(); }
+    }
 }
 
 fn apu_sweep_apply() {
@@ -96,9 +100,12 @@ fn apu_tick(dc: i64) {
     if dc <= 0 { return; }
     let ctrl: i64 = io_ports[SND_CTRL];
     if (ctrl & 0x20) == 0 { voice_lp_prev = 0; voice_level = 0; }
-    // Both the channel and the noise generator must be enabled. Bit 7
-    // selects the audible sample. The LFSR also clocks in wavetable mode.
-    let clock_noise = (ctrl & 0x08) != 0 && (io_ports[SND_NOISE] & 0x10) != 0;
+    let noise_enabled = (ctrl & 0x08) != 0 && (io_ports[SND_NOISE] & 0x10) != 0;
+    let noise_mode = (ctrl & 0x80) != 0;
+    let clock_noise = noise_enabled && noise_mode;
+    // In wavetable mode, clock the LFSR at sample advances. Its reset
+    // clears the register without restarting the wave period already in flight.
+    let clock_wave_lfsr = noise_enabled && !noise_mode;
     var prepaid = sweep_prepaid;
     sweep_prepaid = 0;
     var remaining = dc;
@@ -113,7 +120,9 @@ fn apu_tick(dc: i64) {
         let paid = min(prepaid, chunk);
         prepaid -= paid;
         if chunk > paid { sweep_advance(chunk - paid); }
-        for ch in 4 { if (ctrl & (1 << ch)) != 0 { apu_chan_advance(ch, chunk); } }
+        for ch in 4 {
+            if (ctrl & (1 << ch)) != 0 { apu_chan_advance(ch, chunk, ch == 3 && clock_wave_lfsr); }
+        }
         if aud_enabled {
             aud_acc += chunk;
             if aud_acc >= 128 { aud_acc -= 128; audio_emit(); }

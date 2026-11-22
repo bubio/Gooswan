@@ -23,7 +23,7 @@ The fetchers keep data under `tests/roms/` and `tests/data/`. The build runs cor
 | WSTimingTest | 407 / 407 | CI. All 29 pages run against the pinned ROM. |
 | WSCpuTest v0.7.1 Test All | Pass | Recorded developer baseline for the V30MZ profile. |
 | SingleStepTests V20 native | 2,980,747 / 3,125,000 | Recorded developer baseline for the separate V20 profile. |
-| ws-test-suite | 22 / 22 | Optional local run. All 19 selected markers in `mono/sound/quirks.ws` pass. |
+| ws-test-suite | 22 / 22 | Optional local run. All 20 markers in `mono/sound/quirks.ws` pass. |
 
 ## Focused checks
 
@@ -73,7 +73,7 @@ The mono TX-ready interrupt is level-triggered while serial and the send IRQ are
 
 ## Audio checks
 
-The channel 4 LFSR clocks when both the channel and the noise generator are enabled. This passes the noise-mode-only check in `mono/sound/quirks.ws`. The local harness excludes the marker that expects the LFSR to freeze in wavetable mode. Clock Tower's QUICK START polls the random register in that mode, which still clocks with channel 4 enabled. [WSdev sound register reference](https://ws.nesdev.org/wiki/Sound)
+In wavetable mode, channel 4 clocks the LFSR when its wavetable index advances. Resetting the LFSR leaves the current wave period in flight. In `mono/sound/quirks.ws`, both reads in marker 5:2 land before the next sample advance and see the same value. Clock Tower's QUICK START reads across later sample advances and receives changing values. The noise-output path keeps its WSHWTest-fitted countdown. [ws-test-suite source](https://github.com/asiekierka/ws-test-suite/blob/main/src/mono/sound/quirks/main.c) · [WSdev sound register reference](https://ws.nesdev.org/wiki/Sound)
 
 The FF4 regression used the same APU input events in Gooswan and Swanium and found matching PCM for the tested sequence and conversion rates. Gooswan's sweep period follows the `time + 1` behaviour covered by WSHWTest. This comparison covers the tested sequence and the digital output before device delivery. Use `apu_test` and `audio_test` when changing channel timing, queueing or resampling.
 

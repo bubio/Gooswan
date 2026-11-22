@@ -29,9 +29,9 @@ fn apu_test() {
     port_wr(SND_CTRL, 0x80);
     apu_tick(10);
     apu_check("noise mode alone does not clock", port_rd(SND_RANDOM), 0);
-    port_wr(SND_CTRL, 0x08);
+    port_wr(SND_CTRL, 0x88);
     apu_tick(1);
-    apu_check("noise clocks in channel 4 wavetable mode", port_rd(SND_RANDOM), 1);
+    apu_check("enabled noise channel clocks LFSR", port_rd(SND_RANDOM), 1);
     apu_tick(1);
     port_wr(SND_CTRL, 0x80);
     apu_tick(10);
@@ -52,6 +52,26 @@ fn apu_test() {
     apu_check("noise reset reload holds", lfsr, 0);
     apu_tick(1);
     apu_check("noise reset resumes after reload", lfsr, 1);
+    // A pitch write, channel pause and LFSR reset preserve the wave
+    // countdown already in flight. quirks.ws samples within that interval.
+    apu_reset_state();
+    port_wr(SND_CTRL, 0x08);
+    apu_tick(1096);  // initial pitch zero, 953 ticks left in the current period
+    port_wr(SND_CTRL, 0);
+    port_wr(SND_CH_PITCH + 7, 7);  // subsequent wave steps are 256 ticks apart
+    port_wr(SND_NOISE, 0x18);
+    apu_tick(600);
+    port_wr(SND_CTRL, 0x08);
+    apu_tick(7);
+    apu_check("wave LFSR after reset", port_rd(SND_RANDOM), 0);
+    apu_tick(605);
+    apu_check("wave LFSR holds before a sample advance", port_rd(SND_RANDOM), 0);
+    apu_tick(340);
+    apu_check("wave LFSR holds until retained period expires", port_rd(SND_RANDOM), 0);
+    apu_tick(1);
+    apu_check("wave LFSR clocks with sample advance", port_rd(SND_RANDOM), 1);
+    apu_tick(512);
+    apu_check("wave LFSR clocks for both advances in a batch", port_rd(SND_RANDOM), 7);
     // Channel advance, period 1 pitch (0x7FF): one sample per tick
     apu_reset_state();
     mem[0] = 0x10; mem[1] = 0x32; mem[2] = 0x54;
