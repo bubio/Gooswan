@@ -12,7 +12,7 @@ fn state_test() {
     power_on(image[..]);
     mem[256] = 0xFA; mem[257] = 0xFE; mem[258] = 0x06; mem[259] = 0; mem[260] = 2; mem[261] = 0xEB; mem[262] = 0xFA;
     set_audio(true);
-    io_ports[SND_CTRL] = 1; io_ports[SND_OUTPUT_CTRL] = 0x0F;
+    io_ports[SND_CTRL] = 0x89; io_ports[SND_OUTPUT_CTRL] = 0x0F;
     io_ports[SND_CH_VOL] = 0xFF;
     io_ports[SND_NOISE] = 0x10; // continuation includes the active noise countdown
     for i in 16 { mem[i] = (i * 13) as! u8; }

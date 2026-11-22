@@ -16,8 +16,6 @@ fn noise_reset() {
     noise_counter = 2048 - apu_pitch(3);
 }
 fn noise_tick(dc: i64) {
-    if ((io_ports[SND_NOISE] as i64) & 0x10) == 0 { return; }
-    // Match Swanium: the gate clocks the LFSR even without channel 4 output.
     // A zero counter steps now; a reload holds for 2048 - pitch further ticks.
     var remaining = dc;
     while remaining > 0 {
@@ -98,6 +96,9 @@ fn apu_tick(dc: i64) {
     if dc <= 0 { return; }
     let ctrl: i64 = io_ports[SND_CTRL];
     if (ctrl & 0x20) == 0 { voice_lp_prev = 0; voice_level = 0; }
+    // Both the channel and the noise generator must be enabled. Bit 7
+    // selects the audible sample. The LFSR also clocks in wavetable mode.
+    let clock_noise = (ctrl & 0x08) != 0 && (io_ports[SND_NOISE] & 0x10) != 0;
     var prepaid = sweep_prepaid;
     sweep_prepaid = 0;
     var remaining = dc;
@@ -105,10 +106,10 @@ fn apu_tick(dc: i64) {
         // Wave-only operation can advance in bulk, but never past the next
         // output sample. Feature clocks must retain their per-cycle ordering:
         // DMA latch, sweep/noise, oscillators, then output (as in Swanium).
-        let features = (ctrl & 0x44) == 0x44 || ((io_ports[SND_NOISE] as i64) & 0x10) != 0 || (!model_mono && ((io_ports[SDMA_CTRL] as i64) & 0x80) != 0);
+        let features = (ctrl & 0x44) == 0x44 || clock_noise || (!model_mono && ((io_ports[SDMA_CTRL] as i64) & 0x80) != 0);
         let chunk = if features { 1 } else if aud_enabled { min(remaining, 128 - aud_acc) } else { remaining };
         sdma_tick(chunk);
-        noise_tick(chunk);
+        if clock_noise { noise_tick(chunk); }
         let paid = min(prepaid, chunk);
         prepaid -= paid;
         if chunk > paid { sweep_advance(chunk - paid); }

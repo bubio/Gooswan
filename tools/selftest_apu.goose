@@ -20,22 +20,34 @@ fn apu_reset_state() {
 }
 
 fn apu_test() {
-    // Swanium noise clock: immediate first step, then a full countdown;
-    // channel enable controls audibility, not the random-port clock.
     apu_reset_state();
-    io_ports[0x8E] = 0x10;
-    io_ports[0x86] = 0xFE; io_ports[0x87] = 7; // reload 2, step every 3 ticks
+    port_wr(SND_NOISE, 0x10);
+    port_wr(SND_CH_PITCH + 6, 0xFE);
+    port_wr(SND_CH_PITCH + 7, 7); // reload 2, step every 3 ticks
+    apu_tick(10);
+    apu_check("noise gate alone does not clock", port_rd(SND_RANDOM), 0);
+    port_wr(SND_CTRL, 0x80);
+    apu_tick(10);
+    apu_check("noise mode alone does not clock", port_rd(SND_RANDOM), 0);
+    port_wr(SND_CTRL, 0x08);
     apu_tick(1);
-    apu_check("noise clocks with channel disabled", lfsr, 1);
-    apu_tick(2);
-    apu_check("noise holds for full reload", lfsr, 1);
+    apu_check("noise clocks in channel 4 wavetable mode", port_rd(SND_RANDOM), 1);
     apu_tick(1);
-    apu_check("noise advances after countdown", lfsr, 3);
-    io_ports[0x8E] = 0; apu_tick(10);
+    port_wr(SND_CTRL, 0x80);
+    apu_tick(10);
+    apu_check("disabled channel holds LFSR", port_rd(SND_RANDOM), 1);
+    apu_check("disabled channel holds noise countdown", noise_counter, 1);
+    port_wr(SND_CTRL, 0x88);
+    apu_tick(1);
+    apu_check("re-enabled channel finishes the countdown", port_rd(SND_RANDOM), 1);
+    apu_tick(1);
+    apu_check("noise advances after countdown", port_rd(SND_RANDOM), 3);
+    port_wr(SND_NOISE, 0);
+    apu_tick(10);
     apu_check("closed noise gate holds countdown", noise_counter, 2);
-    port_wr(0x8E, 0x18);
-    apu_check("noise reset clears readback immediately", port_rd(0x92), 0);
-    apu_check("noise reset clears request bit", io_ports[0x8E], 0x10);
+    port_wr(SND_NOISE, 0x18);
+    apu_check("noise reset clears readback immediately", port_rd(SND_RANDOM), 0);
+    apu_check("noise reset clears request bit", io_ports[SND_NOISE], 0x10);
     apu_tick(2);
     apu_check("noise reset reload holds", lfsr, 0);
     apu_tick(1);
