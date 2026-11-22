@@ -58,7 +58,7 @@ Vertical games are detected from the cartridge footer and rotate the screen auto
 1. On each player's computer, sign in on the [Swan Revival account page](https://swanrevival.com/account/), set a player name and generate a one-time device code. In Gooswan, open **Emu > Link Play**, enter the code and select **Link account**. MesenCE players can link their account from **Settings > WonderSwan > WonderGate**.
 2. Open the same game on both computers. Create a room for it in the [Swan Revival lobby](https://swanrevival.com/link-play/) and share the room code with the other player.
 3. In Gooswan, enter the room code under **Emu > Link Play** and select **Join**. In MesenCE with RevivalGate release 7 or later, use **Tools > Link play (WonderSwan)**. Joining restarts the game with the cable attached.
-4. On both computers, navigate to the game's communication menu and select **Ready** in the link dialog. When the cable connects, return to the game to start the match.
+4. Once both players have joined, select **Ready** in each emulator's link dialog. When the cable connects, return to the game and start its communication mode. For **GUNPEY**, connect the cable before advancing from the opening demo to the title screen so **2PLAYER** appears.
 
 Use **Leave or cancel** to disconnect. Resetting or opening a different game leaves the room. Save states are unavailable while the cable is attached. On Windows, keep `gooswan-link.exe` beside `Gooswan.exe` when moving the application. The Swan Revival device token is stored separately from settings in the configuration directory.
 

@@ -61,7 +61,7 @@ fn link_poll() {
             if !front_load_rom(path, true) { link_end("Could not restart the ROM for link play"); return; }
             front_paused = false;
             core::serial_attach(); link_stage = LinkStage.Seated;
-            front_notify("Open the game's link menu, then select Ready");
+            front_notify("Select Ready when both players have joined");
         } else if frame[0] == 'P' && n == 2 && link_stage == LinkStage.Seated {
             link_peer = frame[1] != 0;
             if !link_peer { link_ready = false; }
@@ -128,7 +128,7 @@ fn link_draw_dialog(ww: f32, hh: f32) {
             Pairing => ui::label(c, "Linking account…", ui::TEXT_LEFT),
             Joining => ui::label(c, "Joining room…", ui::TEXT_LEFT),
             Seated => {
-                ui::label(c, if !link_peer { "Waiting for another player…" } else if link_ready { "Waiting for the other player to be ready…" } else { "Enter the game's link menu, then select Ready." }, ui::TEXT_LEFT);
+                ui::label(c, if !link_peer { "Waiting for another player…" } else if link_ready { "Waiting for the other player to be ready…" } else { "Select Ready to connect the cable." }, ui::TEXT_LEFT);
                 if !link_peer || link_ready { ui::widget_disable_begin(c); }
                 if ui::button_label(c, "Ready") { link_set_ready(); }
                 if !link_peer || link_ready { ui::widget_disable_end(c); }

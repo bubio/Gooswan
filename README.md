@@ -4,7 +4,7 @@
   <img src="https://raw.githubusercontent.com/bubio/Gooswan/main/assets/icons/gooswan.png" alt="Gooswan" width="128" height="128">
 </p>
 
-A WonderSwan / WonderSwan Color emulator for macOS, Windows and Linux, written in [Goose](https://github.com/aardappel/goose). Supports keyboard/gamepad controls, vertical games, save states and display scaling.
+A WonderSwan / WonderSwan Color emulator for macOS, Windows and Linux, written in [Goose](https://github.com/aardappel/goose). Supports keyboard/gamepad controls, vertical games, save states, display scaling and [Swan Revival Link Play](docs/user-guide.md#swan-revival-link-play).
 
 <p align="center">
   <a href="https://github.com/bubio/Gooswan/releases/latest">

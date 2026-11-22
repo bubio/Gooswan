@@ -29,7 +29,7 @@ Gooswan/
   docs/user-guide.md
 ```
 
-The AppImage wrapper also includes `licenses/APPIMAGE_NOTICES.txt`. Goose embeds the Japanese font and SDL window icon in the application at compile time. The macOS bundle also includes its ICNS, documentation and licenses. deb/rpm install `/usr/bin/gooswan`, a desktop entry and icon under `/usr/share`, documentation under `/usr/share/doc/gooswan`, and font licensing under `/usr/share/licenses/gooswan`. AppImage contains the same tree and a relocatable `AppRun` launcher. Its runtime license is included inside the image too.
+The AppImage wrapper also includes `licenses/APPIMAGE_NOTICES.txt`. Goose embeds the Japanese font and SDL window icon in the application at compile time. The macOS bundle also includes its ICNS, documentation and licenses. All packages include the Swan Revival worker. The Windows ZIP places it beside the main executable. deb/rpm install `/usr/bin/gooswan` and `/usr/bin/gooswan-link`, a desktop entry and icon under `/usr/share`, documentation under `/usr/share/doc/gooswan`, and font licensing under `/usr/share/licenses/gooswan`. AppImage contains the same tree and a relocatable `AppRun` launcher. Its runtime license is included inside the image too.
 
 ## Platform requirements
 
