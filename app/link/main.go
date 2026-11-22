@@ -62,12 +62,12 @@ func roomCode(input string) string {
 	return code
 }
 
-func pair(ctx context.Context, out io.Writer, path, code string) error {
+func pair(ctx context.Context, out io.Writer, endpoint, path, code string) error {
 	body, err := json.Marshal(map[string]string{"code": strings.TrimSpace(code), "name": "Gooswan"})
 	if err != nil {
 		return err
 	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, service+"/link", bytes.NewReader(body))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, bytes.NewReader(body))
 	if err != nil {
 		return err
 	}
@@ -79,7 +79,7 @@ func pair(ctx context.Context, out io.Writer, path, code string) error {
 	}
 	defer resp.Body.Close()
 	var device struct{ Token string }
-	if resp.StatusCode != http.StatusOK || json.NewDecoder(io.LimitReader(resp.Body, maxFrame)).Decode(&device) != nil || device.Token == "" {
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 || json.NewDecoder(io.LimitReader(resp.Body, maxFrame)).Decode(&device) != nil || device.Token == "" {
 		return errors.New("Swan Revival rejected the device code")
 	}
 	file, err := os.CreateTemp(filepath.Dir(path), ".link-token-*")
@@ -258,7 +258,7 @@ func run(in io.Reader, out io.Writer, tokenFile string) error {
 	if first.kind == 'A' {
 		ctx, cancel := context.WithTimeout(ctx, 15*time.Second)
 		defer cancel()
-		return pair(ctx, out, tokenFile, string(first.data))
+		return pair(ctx, out, service+"/link", tokenFile, string(first.data))
 	}
 	code := roomCode(string(first.data))
 	if first.kind != 'J' || code == "" {

@@ -8,12 +8,43 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/coder/websocket"
 )
+
+func TestPairAcceptsCreated(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var body struct{ Code, Name string }
+		if r.Method != http.MethodPost || r.URL.Path != "/link" ||
+			json.NewDecoder(r.Body).Decode(&body) != nil || body.Code != "fixture-code" || body.Name != "Gooswan" {
+			http.Error(w, "unexpected pairing request", http.StatusBadRequest)
+			return
+		}
+		w.WriteHeader(http.StatusCreated)
+		io.WriteString(w, `{"token":"fixture-device-token","handle":"player"}`)
+	}))
+	defer server.Close()
+	path := filepath.Join(t.TempDir(), "device-token")
+	var out bytes.Buffer
+	if err := pair(ctx, &out, server.URL+"/link", path, " fixture-code "); err != nil {
+		t.Fatal(err)
+	}
+	token, err := os.ReadFile(path)
+	if err != nil || string(token) != "fixture-device-token" {
+		t.Fatalf("token file: %q (%v)", token, err)
+	}
+	f, err := readFrame(&out)
+	if err != nil || f.kind != 'A' || len(f.data) != 0 {
+		t.Fatalf("pairing acknowledgment: %v (%v)", f, err)
+	}
+}
 
 func TestRoomCode(t *testing.T) {
 	for typed, want := range map[string]string{
